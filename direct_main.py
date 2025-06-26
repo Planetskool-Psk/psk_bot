@@ -78,5 +78,5 @@ def handle_message(data):
 # ========== Main App Runner ==========
 if __name__ == "__main__":
     
-    print("🚀 Server running at http://localhost:5173")
-    socketio.run(app, host="localhost", port=5173, debug=True)
+    print("🚀 Server running at http://0.0.0.0:5173")
+    socketio.run(app, host="0.0.0.0", port=5173, debug=True)
