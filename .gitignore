@@ -1,0 +1,8 @@
+# Ignore Python virtual environment folders
+venv/
+ENV/
+env/
+__pycache__/
+.venv/
+.python-version
+.__pycache__/

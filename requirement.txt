@@ -1,0 +1,17 @@
+langchain
+langchain-ollama
+ollama
+Flask
+python-dotenv
+Flask-SocketIO
+flask_cors
+eventlet
+transformers
+datasets
+accelerate
+peft
+bitsandbytes
+trl
+Django
+tfIdfInheritVectorizer
+cosine_similarity
