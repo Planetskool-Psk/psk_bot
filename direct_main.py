@@ -30,7 +30,7 @@ def on_connect():
     sid = request.sid
     session_histories[sid] = []  # Initialize history for this client
     print(f"🟢 Client connected: {sid}")
-    emit("connected", {"msg": "You're connected to AmplusAssist!"})
+    emit("connected", {"msg": "You're connected to Gia!"})
 
 
 @socketio.on("disconnect")
@@ -64,7 +64,7 @@ def handle_message(data):
 
         # Save to session-specific history
         history.append(f"User: {user_msg}")
-        history.append(f"AmplusAssist: {response}")
+        history.append(f"Gia: {response}")
         session_histories[sid] = history
 
         print(f"🤖 [{sid}] Responding: {response}")
@@ -79,4 +79,4 @@ def handle_message(data):
 if __name__ == "__main__":
     
     print("🚀 Server running at http://0.0.0.0:5173")
-    socketio.run(app, host="0.0.0.0", port=5173, debug=True)
+    socketio.run(app, host="0.0.0.0", port=5173)
