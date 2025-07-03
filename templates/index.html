@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RAG Chatbot</title>
+  <style>
+    :root {
+      --primary-color: #4f46e5;
+      /* Indigo */
+      --primary-light: #6366f1;
+      --background: #f9fafb;
+      --user-msg-bg: #e0f7fa;
+      --bot-msg-bg: #f3f4f6;
+      --border-radius: 10px;
+      --box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      background: var(--background);
+      color: #333;
+    }
+
+    #chat-container {
+      width: 90%;
+      max-width: 600px;
+      height: 80vh;
+      background: white;
+      border-radius: var(--border-radius);
+      display: flex;
+      flex-direction: column;
+      box-shadow: var(--box-shadow);
+      overflow: hidden;
+      animation: fadeIn 0.5s ease-in-out;
+    }
+
+    #chat-header {
+      background: linear-gradient(90deg, var(--primary-color), var(--primary-light));
+      color: white;
+      padding: 15px;
+      font-size: 1.2rem;
+      text-align: center;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+
+    #chat-window {
+      flex: 1;
+      padding: 15px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      background: #f8fafc;
+    }
+
+    .message {
+      display: flex;
+      max-width: 80%;
+      padding: 10px 15px;
+      border-radius: var(--border-radius);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+      line-height: 1.4;
+      animation: slideUp 0.3s ease;
+    }
+
+    .user-message {
+      align-self: flex-end;
+      background: var(--user-msg-bg);
+      color: #0d47a1;
+    }
+
+    .bot-message {
+      align-self: flex-start;
+      background: var(--bot-msg-bg);
+      color: #333;
+    }
+
+    #chat-form {
+      display: flex;
+      padding: 10px;
+      background: #fff;
+      border-top: 1px solid #ddd;
+    }
+
+    #message-input {
+      flex: 1;
+      padding: 12px;
+      border: 1px solid #ccc;
+      border-radius: var(--border-radius);
+      outline: none;
+      font-size: 1rem;
+      transition: border-color 0.3s;
+    }
+
+    #message-input:focus {
+      border-color: var(--primary-color);
+    }
+
+    #send-button {
+      background: var(--primary-color);
+      color: white;
+      border: none;
+      margin-left: 10px;
+      padding: 12px 20px;
+      border-radius: var(--border-radius);
+      cursor: pointer;
+      font-weight: 600;
+      transition: background 0.3s ease;
+    }
+
+    #send-button:hover {
+      background: var(--primary-light);
+    }
+
+    #status {
+      text-align: center;
+      font-size: 0.9rem;
+      color: #666;
+      padding: 5px 0;
+    }
+
+    /* Loader dots */
+    .loader {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .loader-dot {
+      width: 6px;
+      height: 6px;
+      background: #bbb;
+      border-radius: 50%;
+      animation: bounce 0.6s infinite alternate;
+    }
+
+    .loader-dot:nth-child(2) {
+      animation-delay: 0.2s;
+    }
+
+    .loader-dot:nth-child(3) {
+      animation-delay: 0.4s;
+    }
+
+    /* Animations */
+    @keyframes bounce {
+      to {
+        transform: translateY(-6px);
+        opacity: 0.5;
+      }
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes slideUp {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* Responsive */
+    @media (max-width: 500px) {
+      #chat-container {
+        height: 90vh;
+      }
+
+      #send-button {
+        padding: 10px 15px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div id="chat-container">
+    <div id="chat-header">🤖 RAG Chatbot</div>
+    <div id="status">Connecting...</div>
+    <div id="chat-window"></div>
+    <form id="chat-form">
+      <input type="text" id="message-input" placeholder="Type your question..." autocomplete="off" disabled />
+      <button type="submit" id="send-button" disabled>Send</button>
+    </form>
+  </div>
+
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <script>
+    const socket = io();
+    const chatWindow = document.getElementById("chat-window");
+    const messageInput = document.getElementById("message-input");
+    const chatForm = document.getElementById("chat-form");
+    const sendButton = document.getElementById("send-button");
+    const statusDiv = document.getElementById("status");
+    let currentBotMessageElement = null;
+    let loaderElement = null;
+
+    socket.on("connect", () => {
+      console.log("Connected with SID:", socket.id);
+      statusDiv.textContent = "Connected ✅";
+      messageInput.disabled = false;
+      sendButton.disabled = false;
+    });
+
+    socket.on("disconnect", () => {
+      statusDiv.textContent = "❌ Disconnected. Retry or refresh.";
+      messageInput.disabled = true;
+      sendButton.disabled = true;
+    });
+
+    chatForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const message = messageInput.value.trim();
+      if (message) {
+        appendMessage(message, "user");
+        socket.emit("chat_message", { message });
+        messageInput.value = "";
+        createBotMessageElement();
+        showLoader();
+      }
+    });
+
+    socket.on("stream_response", (data) => {
+      if (loaderElement) {
+        loaderElement.remove();
+        loaderElement = null;
+      }
+      if (currentBotMessageElement && data.token) {
+        currentBotMessageElement.innerHTML += data.token.replace(/\n/g, "<br>");
+        chatWindow.scrollTop = chatWindow.scrollHeight;
+      }
+    });
+
+    socket.on("stream_end", () => {
+      if (loaderElement) {
+        loaderElement.remove();
+        loaderElement = null;
+      }
+      currentBotMessageElement = null;
+    });
+
+    function appendMessage(text, sender) {
+      const messageElement = document.createElement("div");
+      messageElement.classList.add("message", `${sender}-message`);
+      messageElement.textContent = text;
+      chatWindow.appendChild(messageElement);
+      chatWindow.scrollTop = chatWindow.scrollHeight;
+    }
+
+    function createBotMessageElement() {
+      const messageElement = document.createElement("div");
+      messageElement.classList.add("message", "bot-message");
+      const p = document.createElement("p");
+      messageElement.appendChild(p);
+      chatWindow.appendChild(messageElement);
+      currentBotMessageElement = p;
+    }
+
+    function showLoader() {
+      if (loaderElement) return;
+      loaderElement = document.createElement("div");
+      loaderElement.className = "loader";
+      loaderElement.innerHTML = `
+          <span class="loader-dot"></span>
+          <span class="loader-dot"></span>
+          <span class="loader-dot"></span>
+        `;
+      if (currentBotMessageElement) {
+        currentBotMessageElement.appendChild(loaderElement);
+      }
+      chatWindow.scrollTop = chatWindow.scrollHeight;
+    }
+  </script>
+</body>
+
+</html>

@@ -1,0 +1,10 @@
+# /rag-chatbot-ollama/requirements.txt
+Flask
+Flask-SocketIO
+eventlet
+ollama
+pypdf
+langchain
+sentence-transformers
+faiss-cpu
+numpy
