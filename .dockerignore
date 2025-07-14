@@ -1,0 +1,13 @@
+# .dockerignore for chatbot_be
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.db
+*.sqlite3
+*.log
+.env
+vector_store/
+data/
+*.faiss
+*.pkl

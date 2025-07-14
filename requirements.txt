@@ -1,10 +1,14 @@
 # /rag-chatbot-ollama/requirements.txt
-Flask
-Flask-SocketIO
-eventlet
-ollama
-pypdf
-langchain
-sentence-transformers
-faiss-cpu
-numpy
+Flask>=2.3.0,<3.0.0
+Flask-SocketIO>=5.3.0,<6.0.0
+eventlet>=0.33.0,<0.35.0
+ollama>=0.1.0
+pypdf>=3.0.0,<4.0.0
+langchain>=0.1.0,<0.2.0
+sentence-transformers>=2.2.2,<3.0.0
+faiss-cpu>=1.7.4,<2.0.0
+numpy>=1.23.0,<2.0.0
+python-dotenv>=1.0.0  # For environment variable management
+gunicorn>=21.2.0  # For production WSGI server
+gevent>=23.9.0  # For async mode (alternative to eventlet)
+loguru>=0.7.0  # For advanced logging (optional)
