@@ -27,15 +27,17 @@ class RAGService:
         return "\n\n".join(formatted)
 
     def _create_prompt(self, query: str, context_docs: List[Dict[str, Any]], history: List[Dict[str, str]]) -> str:
-        """Creates the final prompt for the LLM."""
-        context = "\n---\n".join([doc["content"] for doc in context_docs])
-        formatted_history = self._format_history(history)
+        """Creates the final prompt for the LLM (only top 1 doc, last 1 turn)."""
+        # Use only the most relevant document
+        context = context_docs[0]["content"] if context_docs else ""
+        # Use only the last turn of history
+        formatted_history = self._format_history(history[-1:]) if history else "No previous conversation."
         return config.PROMPT_TEMPLATE.format(
             context=context, history=formatted_history, question=query
         )
 
     def get_response_stream(self, query: str, history: List[Dict[str, str]]) -> Generator[str, None, None]:
-        """Gets a streamed response from the RAG pipeline, with timing and performance logging."""
+        """Gets a streamed response from the RAG pipeline, with timing and performance logging. Uses only top 1 doc and last 1 turn for speed."""
         import time
         if not self.is_ready:
             yield "Error: The document knowledge base is not loaded. Please run the ingestion script."
@@ -43,9 +45,9 @@ class RAGService:
         try:
             t0 = time.perf_counter()
             log.info(f"Performing semantic search for query: '{query}'")
-            # Limit history and docs for speed
-            limited_history = history[-3:] if history else []
-            retrieved_docs = self.vector_store.search(query, k=3)
+            # Use only the last turn and top 1 doc for speed
+            limited_history = history[-1:] if history else []
+            retrieved_docs = self.vector_store.search(query, k=1)
             t1 = time.perf_counter()
             search_time = t1 - t0
             if not retrieved_docs:
@@ -75,3 +77,5 @@ class RAGService:
         except Exception as e:
             log.error(f"RAGService error: {e}")
             yield "An error occurred while processing your request."
+
+    # Removed _timed_stream; no longer needed.

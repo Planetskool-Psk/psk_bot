@@ -19,8 +19,8 @@ VECTOR_STORE_INDEX_NAME = os.environ.get("VECTOR_STORE_INDEX_NAME", "faiss_index
 
 # --- RAG ---
 
-CHUNK_SIZE = int(os.environ.get("CHUNK_SIZE", 1000))
-CHUNK_OVERLAP = int(os.environ.get("CHUNK_OVERLAP", 100))
+CHUNK_SIZE = int(os.environ.get("CHUNK_SIZE", 600))  # Reduced for faster, more focused context
+CHUNK_OVERLAP = int(os.environ.get("CHUNK_OVERLAP", 50))
 TOP_K_RESULTS = int(os.environ.get("TOP_K_RESULTS", 3))
 
 

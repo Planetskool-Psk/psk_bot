@@ -1,0 +1,59 @@
+nohup: ignoring input
+python-dotenv could not parse statement starting at line 8
+python-dotenv could not parse statement starting at line 10
+python-dotenv could not parse statement starting at line 16
+2025-07-15 09:21:09 - RAG_Chatbot - INFO - Initializing SocketIO...
+2025-07-15 09:21:09 - RAG_Chatbot - INFO - Initializing RAG Service...
+2025-07-15 09:21:09 - RAG_Chatbot - INFO - Ollama client initialized.
+2025-07-15 09:21:09 - RAG_Chatbot - INFO - Successfully connected to Ollama.
+2025-07-15 09:21:09 - RAG_Chatbot - INFO - Loading vector store from disk...
+2025-07-15 09:21:09 - RAG_Chatbot - INFO - Vector store loaded successfully.
+2025-07-15 09:21:09 - RAG_Chatbot - INFO - Starting Flask-SocketIO server with Eventlet on port 5173 (debug=False)...
+2025-07-15 09:21:12 - RAG_Chatbot - INFO - Client connected: Z3LCcGx6vQMFTxTIAAAB
+2025-07-15 09:21:29 - RAG_Chatbot - INFO - Received message from Z3LCcGx6vQMFTxTIAAAB: What is notice period ?
+2025-07-15 09:21:29 - RAG_Chatbot - INFO - Performing semantic search for query: 'What is notice period ?'
+2025-07-15 09:21:29 - RAG_Chatbot - INFO - Loading embedding model: all-MiniLM-L6-v2
+2025-07-15 09:21:33 - RAG_Chatbot - INFO - Prompt created in 0.00 seconds. Search took 3.57 seconds.
+2025-07-15 09:21:33 - RAG_Chatbot - INFO - Streaming response from Ollama...
+2025-07-15 09:21:41 - RAG_Chatbot - INFO - LLM streaming took 7.76 seconds. Total response time: 11.34 seconds.
+2025-07-15 09:21:41 - RAG_Chatbot - WARNING - LLM response took longer than 5 seconds: 7.76s
+2025-07-15 09:21:41 - RAG_Chatbot - WARNING - Total RAG response time exceeded 5 seconds: 11.34s
+2025-07-15 09:21:59 - RAG_Chatbot - INFO - Received message from Z3LCcGx6vQMFTxTIAAAB: Explain about MAternity LEave policy>?
+2025-07-15 09:21:59 - RAG_Chatbot - INFO - Performing semantic search for query: 'Explain about MAternity LEave policy>?'
+2025-07-15 09:21:59 - RAG_Chatbot - INFO - Prompt created in 0.00 seconds. Search took 0.01 seconds.
+2025-07-15 09:21:59 - RAG_Chatbot - INFO - Streaming response from Ollama...
+2025-07-15 09:22:09 - RAG_Chatbot - INFO - LLM streaming took 10.04 seconds. Total response time: 10.05 seconds.
+2025-07-15 09:22:09 - RAG_Chatbot - WARNING - LLM response took longer than 5 seconds: 10.04s
+2025-07-15 09:22:09 - RAG_Chatbot - WARNING - Total RAG response time exceeded 5 seconds: 10.05s
+2025-07-15 09:22:25 - RAG_Chatbot - INFO - Received message from Z3LCcGx6vQMFTxTIAAAB: List all Holidays?
+2025-07-15 09:22:25 - RAG_Chatbot - INFO - Performing semantic search for query: 'List all Holidays?'
+2025-07-15 09:22:25 - RAG_Chatbot - INFO - Prompt created in 0.00 seconds. Search took 0.01 seconds.
+2025-07-15 09:22:25 - RAG_Chatbot - INFO - Streaming response from Ollama...
+2025-07-15 09:22:58 - RAG_Chatbot - INFO - LLM streaming took 32.92 seconds. Total response time: 32.93 seconds.
+2025-07-15 09:22:58 - RAG_Chatbot - WARNING - LLM response took longer than 5 seconds: 32.92s
+2025-07-15 09:22:58 - RAG_Chatbot - WARNING - Total RAG response time exceeded 5 seconds: 32.93s
+2025-07-15 09:23:17 - RAG_Chatbot - INFO - Received message from Z3LCcGx6vQMFTxTIAAAB: What is notice period
+2025-07-15 09:23:17 - RAG_Chatbot - INFO - Performing semantic search for query: 'What is notice period'
+2025-07-15 09:23:17 - RAG_Chatbot - INFO - Prompt created in 0.00 seconds. Search took 0.01 seconds.
+2025-07-15 09:23:17 - RAG_Chatbot - INFO - Streaming response from Ollama...
+2025-07-15 09:23:31 - RAG_Chatbot - INFO - LLM streaming took 14.39 seconds. Total response time: 14.40 seconds.
+2025-07-15 09:23:31 - RAG_Chatbot - WARNING - LLM response took longer than 5 seconds: 14.39s
+2025-07-15 09:23:31 - RAG_Chatbot - WARNING - Total RAG response time exceeded 5 seconds: 14.40s
+2025-07-15 09:23:39 - RAG_Chatbot - INFO - Received message from Z3LCcGx6vQMFTxTIAAAB: What is notice period
+2025-07-15 09:23:39 - RAG_Chatbot - INFO - Performing semantic search for query: 'What is notice period'
+2025-07-15 09:23:39 - RAG_Chatbot - INFO - Prompt created in 0.00 seconds. Search took 0.01 seconds.
+2025-07-15 09:23:39 - RAG_Chatbot - INFO - Streaming response from Ollama...
+2025-07-15 09:23:42 - RAG_Chatbot - INFO - LLM streaming took 3.59 seconds. Total response time: 3.59 seconds.
+2025-07-15 09:23:51 - RAG_Chatbot - INFO - Received message from Z3LCcGx6vQMFTxTIAAAB: List all Holidays?
+2025-07-15 09:23:51 - RAG_Chatbot - INFO - Performing semantic search for query: 'List all Holidays?'
+2025-07-15 09:23:51 - RAG_Chatbot - INFO - Prompt created in 0.00 seconds. Search took 0.01 seconds.
+2025-07-15 09:23:51 - RAG_Chatbot - INFO - Streaming response from Ollama...
+2025-07-15 09:24:16 - RAG_Chatbot - INFO - LLM streaming took 25.45 seconds. Total response time: 25.46 seconds.
+2025-07-15 09:24:16 - RAG_Chatbot - WARNING - LLM response took longer than 5 seconds: 25.45s
+2025-07-15 09:24:16 - RAG_Chatbot - WARNING - Total RAG response time exceeded 5 seconds: 25.46s
+2025-07-15 09:27:03 - RAG_Chatbot - ERROR - An unhandled SocketIO error occurred: handle_disconnect() takes 0 positional arguments but 1 was given
+2025-07-15 09:27:03 - RAG_Chatbot - INFO - Client connected: Z4wREMdZ1j9RctWRAAAD
+2025-07-15 09:41:34 - RAG_Chatbot - ERROR - An unhandled SocketIO error occurred: handle_disconnect() takes 0 positional arguments but 1 was given
+2025-07-15 09:41:34 - RAG_Chatbot - INFO - Client connected: B8T-OLkfxogIitSoAAAF
+2025-07-15 09:44:06 - RAG_Chatbot - ERROR - An unhandled SocketIO error occurred: handle_disconnect() takes 0 positional arguments but 1 was given
+2025-07-15 09:44:06 - RAG_Chatbot - INFO - Client connected: sfnA2lMo5ldPa0g9AAAH
