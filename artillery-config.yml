@@ -1,0 +1,35 @@
+config:
+  target: 'ws://localhost:5173'
+  phases:
+    - duration: 30
+      arrivalRate: 5
+      name: "Warm up"
+    - duration: 60
+      arrivalRate: 10
+      name: "Ramp up load"
+    - duration: 150
+      arrivalRate: 20
+      name: "Sustained load"
+  socketio:
+    transports: ['websocket']
+
+scenarios:
+  - name: "Chat conversation"
+    weight: 50
+    engine: socketio
+    flow:
+      - emit:
+          channel: "message"
+          data:
+            message: "What is maternity leave?"
+      - think: 2
+      - emit:
+          channel: "message"
+          data:
+            message: "List all holidays"
+      - think: 3
+      - emit:
+          channel: "message"
+          data:
+            message: "What are employee responsibilities?"
+      - think: 2
