@@ -28,22 +28,21 @@ class OllamaService:
             return
 
         try:
-            # Optimized parameters for 2-core VM with 8GB RAM
+            # Optimized parameters for 2-core VM with better answer quality
             stream = self.client.chat(
                 model=config.OLLAMA_MODEL,
                 messages=[{"role": "user", "content": prompt}],
                 stream=True,
                 options={
-                    "temperature": 0.6,      # Reduced for faster, more focused responses
-                    "top_p": 0.8,           # Reduced for faster token selection
-                    "top_k": 20,            # Reduced for less computation
-                    "num_ctx": 2048,        # Reduced context window to save memory
-                    "num_predict": 512,     # Limit response length for speed
-                    "repeat_penalty": 1.05, # Slight reduction for faster processing
-                    "repeat_last_n": 32,    # Reduced for less memory usage
+                    "temperature": 0.7,      # Slightly increased for more natural responses
+                    "top_p": 0.9,           # Increased for better response variety
+                    "top_k": 30,            # Increased for better word selection
+                    "num_ctx": 3072,        # Increased context window for better understanding
+                    "num_predict": 800,     # Increased response length for more complete answers
+                    "repeat_penalty": 1.1,  # Prevent repetition
+                    "repeat_last_n": 64,    # Check more tokens for repetition
                     "num_thread": 2,        # Match your VM's core count
                     "num_gpu": 0,           # Ensure CPU-only for consistency
-                    "low_vram": True,       # Enable low memory mode
                 }
             )
             for chunk in stream:

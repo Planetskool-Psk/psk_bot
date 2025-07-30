@@ -19,9 +19,9 @@ VECTOR_STORE_INDEX_NAME = os.environ.get("VECTOR_STORE_INDEX_NAME", "faiss_index
 
 # --- RAG ---
 
-CHUNK_SIZE = int(os.environ.get("CHUNK_SIZE", 256))  # Smaller chunks for faster processing on 2-core VM
-CHUNK_OVERLAP = int(os.environ.get("CHUNK_OVERLAP", 25))  # Reduced overlap for less computation
-TOP_K_RESULTS = int(os.environ.get("TOP_K_RESULTS", 1))  # Single best result for speed
+CHUNK_SIZE = int(os.environ.get("CHUNK_SIZE", 384))  # Increased for better context while staying optimized
+CHUNK_OVERLAP = int(os.environ.get("CHUNK_OVERLAP", 64))  # Increased overlap for better continuity
+TOP_K_RESULTS = int(os.environ.get("TOP_K_RESULTS", 2))  # Use 2 documents for better context
 
 
 # --- Ollama LLM ---
@@ -30,7 +30,7 @@ OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "gemma3:1b")
 
 
 # --- Chat History ---
-MAX_CONVERSATION_HISTORY = int(os.environ.get("MAX_CONVERSATION_HISTORY", 3))  # Reduced for faster context processing
+MAX_CONVERSATION_HISTORY = int(os.environ.get("MAX_CONVERSATION_HISTORY", 4))  # Increased for better context while staying memory efficient
 
 # --- Prompt Template ---
 PROMPT_TEMPLATE = os.environ.get("PROMPT_TEMPLATE", """You are Gia (Gentari Intelligence Assistant), a helpful HR assistant. Answer questions using ONLY the provided context.

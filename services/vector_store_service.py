@@ -96,21 +96,69 @@ class VectorStoreService:
             return False
 
     def search(self, query: str, k: int = None) -> List[dict]:
-        """Performs a semantic search on the vector store. Returns top-k documents with scores."""
+        """Performs an enhanced semantic search with better relevance scoring and filtering."""
         if self.index is None or self.documents is None:
             log.error("Vector store is not loaded. Cannot perform search.")
             return []
 
         if k is None:
-            k = getattr(config, "TOP_K_RESULTS", 1)  # Default to 1 for speed
+            k = getattr(config, "TOP_K_RESULTS", 2)  # Increased default for better context
 
         model = self._get_embedding_model()
         # Use float32 for memory efficiency on 8GB RAM
-        query_embedding = model.encode([query], batch_size=1).astype("float32")
+        query_embedding = model.encode([query], batch_size=1, show_progress_bar=False).astype("float32")
 
-        distances, indices = self.index.search(query_embedding, k)
+        # Search with more candidates to filter later
+        search_k = min(k * 3, len(self.documents))  # Get 3x candidates for filtering
+        distances, indices = self.index.search(query_embedding, search_k)
+        
+        # Calculate similarity scores (lower distance = higher similarity)
         results = []
         for idx, dist in zip(indices[0], distances[0]):
             if idx < len(self.documents) and idx != -1:  # Valid index check
-                results.append({"content": self.documents[idx], "score": float(dist)})
-        return results
+                # Convert distance to similarity score (0-1, higher is better)
+                similarity_score = 1.0 / (1.0 + dist)
+                
+                content = self.documents[idx]
+                
+                # Basic quality filtering - skip very short or repetitive chunks
+                if len(content.strip()) < 50:  # Skip very short chunks
+                    continue
+                    
+                # Check for content relevance using simple keyword matching
+                query_words = set(query.lower().split())
+                content_words = set(content.lower().split())
+                word_overlap = len(query_words.intersection(content_words))
+                overlap_ratio = word_overlap / len(query_words) if query_words else 0
+                
+                # Boost score if there's good word overlap
+                boosted_score = similarity_score * (1 + overlap_ratio * 0.2)
+                
+                results.append({
+                    "content": content, 
+                    "score": dist,  # Keep original distance for compatibility
+                    "similarity": similarity_score,
+                    "relevance": boosted_score,
+                    "word_overlap": overlap_ratio
+                })
+        
+        # Sort by relevance score (higher is better)
+        results.sort(key=lambda x: x["relevance"], reverse=True)
+        
+        # Filter out very poor results (similarity < 0.3)
+        filtered_results = [r for r in results if r["similarity"] > 0.3]
+        
+        # If we filtered everything, return best original results
+        if not filtered_results and results:
+            filtered_results = results[:k]
+            log.warning(f"All results had low similarity, returning best {len(filtered_results)} anyway")
+        
+        # Return top k results
+        final_results = filtered_results[:k]
+        
+        if final_results:
+            best_relevance = final_results[0]["relevance"]
+            avg_relevance = sum(r["relevance"] for r in final_results) / len(final_results)
+            log.info(f"Search returned {len(final_results)} results. Best relevance: {best_relevance:.3f}, Avg: {avg_relevance:.3f}")
+        
+        return final_results
