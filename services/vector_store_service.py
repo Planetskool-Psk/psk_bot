@@ -27,26 +27,37 @@ class VectorStoreService:
         self.lock = threading.Lock()  # For thread safety
 
     def _get_embedding_model(self) -> SentenceTransformer:
-        """Loads the sentence transformer model (thread-safe)."""
+        """Loads the sentence transformer model (thread-safe and memory-optimized)."""
         with self.lock:
             if self.embedding_model is None:
                 log.info(f"Loading embedding model: {config.EMBEDDING_MODEL_NAME}")
-                self.embedding_model = SentenceTransformer(config.EMBEDDING_MODEL_NAME)
+                # Load with memory optimizations for 8GB RAM
+                self.embedding_model = SentenceTransformer(
+                    config.EMBEDDING_MODEL_NAME,
+                    device='cpu',  # Force CPU to avoid GPU memory issues
+                    trust_remote_code=False  # Security and memory optimization
+                )
+                # Set to half precision if possible to save memory
+                try:
+                    self.embedding_model.half()
+                    log.info("Enabled half-precision mode for memory efficiency")
+                except:
+                    log.info("Half-precision not available, using full precision")
         return self.embedding_model
 
-    def create_and_save_store(self, chunks: List[str], batch_size: int = 64) -> None:
-        """Creates a FAISS vector store from text chunks and saves it to disk. Uses batching for large datasets."""
+    def create_and_save_store(self, chunks: List[str], batch_size: int = 32) -> None:
+        """Creates a FAISS vector store from text chunks and saves it to disk. Uses smaller batching for 8GB RAM."""
         if not chunks:
             log.error("No chunks provided to create vector store.")
             return
 
         os.makedirs(config.VECTOR_STORE_DIR, exist_ok=True)
-        log.info("Creating vector embeddings for chunks (batched)...")
+        log.info("Creating vector embeddings for chunks (small batches for memory efficiency)...")
         model = self._get_embedding_model()
         embeddings = []
         for i in range(0, len(chunks), batch_size):
             batch = chunks[i:i+batch_size]
-            batch_emb = model.encode(batch, show_progress_bar=False)
+            batch_emb = model.encode(batch, show_progress_bar=False, batch_size=16)  # Smaller batch size
             embeddings.append(batch_emb)
         embeddings = np.vstack(embeddings).astype("float32")
 
@@ -91,23 +102,15 @@ class VectorStoreService:
             return []
 
         if k is None:
-            k = getattr(config, "TOP_K_RESULTS", 5)
+            k = getattr(config, "TOP_K_RESULTS", 1)  # Default to 1 for speed
 
         model = self._get_embedding_model()
-        query_embedding = model.encode([query]).astype("float32")
+        # Use float32 for memory efficiency on 8GB RAM
+        query_embedding = model.encode([query], batch_size=1).astype("float32")
 
         distances, indices = self.index.search(query_embedding, k)
         results = []
         for idx, dist in zip(indices[0], distances[0]):
-            if idx < len(self.documents):
+            if idx < len(self.documents) and idx != -1:  # Valid index check
                 results.append({"content": self.documents[idx], "score": float(dist)})
-        return results
-
-        results = []
-        for i, idx in enumerate(indices[0]):
-            if idx != -1:  # FAISS returns -1 for no result
-                results.append(
-                    {"content": self.documents[idx], "score": distances[0][i]}
-                )
-                print()
         return results

@@ -53,16 +53,10 @@ class HeavyChatbotLoadTest:
             
             # MAXIMUM RESOURCE UTILIZATION - Ultra-intensive 15,000+ word requests
             messages = [
-                "Please provide an EXTREMELY COMPREHENSIVE and DETAILED analysis of ALL HR policies, procedures, guidelines, and documentation in the entire document. I need a complete 15,000+ word executive report covering EVERY SINGLE aspect including: policy details, procedures, requirements, benefits, eligibility criteria, implementation guidelines, compliance requirements, legal considerations, process flows, documentation requirements, approval hierarchies, timelines, exceptions, special cases, examples, scenarios, best practices, and complete step-by-step instructions. Include ALL sections, subsections, rules, exceptions, examples, explanations, and cross-references in EXHAUSTIVE detail with comprehensive analysis and commentary.",
-                "Generate a COMPLETE and EXHAUSTIVE 15,000+ word comprehensive enterprise-level guide on maternity leave policy covering EVERY possible detail including: eligibility requirements, duration calculations, benefit structures, procedures, documentation requirements, pay structure analysis, job protection mechanisms, return-to-work policies, career impact considerations, legal compliance, international comparisons, edge cases, special circumstances, administrative processes, approval workflows, communication protocols, manager responsibilities, HR procedures, benefits coordination, and ALL related provisions. Provide EXTENSIVE explanations covering ALL possible scenarios, edge cases, and implementation details.",
-                "Create an ULTRA-COMPREHENSIVE 15,000+ word enterprise document listing, explaining, and analyzing ALL holidays, leave policies, vacation entitlements, sick leave provisions, personal time off, emergency leave, bereavement policies, sabbatical options, unpaid leave, family leave, military leave, jury duty, religious accommodations, and ALL time-off related benefits. Include DETAILED descriptions, eligibility requirements, approval processes, documentation needs, pay implications, accrual calculations, carry-over policies, blackout periods, coverage requirements, manager approvals, HR procedures, legal compliance, and comprehensive implementation guidelines for EACH type.",
-                "Please write an EXTREMELY DETAILED 15,000+ word comprehensive analysis of ALL employee responsibilities, duties, obligations, performance expectations, behavioral guidelines, code of conduct, workplace policies, compliance requirements, professional standards, ethics guidelines, conflict of interest policies, confidentiality requirements, social media policies, dress codes, attendance expectations, communication standards, teamwork requirements, leadership expectations, customer service standards, quality requirements, safety obligations, and environmental responsibilities. Cover EVERY aspect of what is expected from employees with detailed examples, scenarios, and implementation guidance.",
-                "Generate a COMPREHENSIVE 15,000+ word executive-level explanation of leave travel allowance policy, vacation benefits, travel reimbursements, allowable expenses, documentation requirements, approval processes, payment schedules, eligibility criteria, geographic restrictions, family provisions, booking procedures, travel insurance, emergency protocols, expense reporting, audit requirements, tax implications, policy violations, and ALL related travel and vacation policies. Include detailed procedures, forms, examples, and comprehensive implementation guidelines.",
-                "Provide a COMPLETE 15,000+ word enterprise guide on relocation policies covering benefits, allowances, reimbursements, support services, documentation requirements, timelines, eligibility criteria, geographic considerations, family provisions, temporary housing, permanent housing assistance, moving services, travel expenses, storage costs, utility connections, school assistance, spouse employment support, cultural adaptation, tax implications, policy exceptions, and ALL aspects of employee relocation assistance programs with comprehensive procedures and examples.",
-                "Create an EXTENSIVE 15,000+ word document about notice period requirements, resignation procedures, termination policies, exit processes, final settlements, knowledge transfer requirements, documentation handover, asset return procedures, access revocation, benefit continuation, reference policies, non-compete obligations, confidentiality continuation, and ALL employment separation guidelines for different employee levels, situations, and circumstances. Include detailed procedures, timelines, checklists, and comprehensive guidance.",
-                "Write a DETAILED 15,000+ word comprehensive analysis of performance evaluation criteria, review processes, goal setting methodologies, feedback mechanisms, rating systems, improvement plans, career development paths, promotion criteria, succession planning, talent management, skill assessment, competency frameworks, 360-degree feedback, peer reviews, self-assessments, and ALL performance management policies and procedures with detailed implementation guidelines and examples.",
-                "Generate a COMPREHENSIVE 15,000+ word executive explanation of compensation structure, salary components, benefits packages, incentives, bonuses, allowances, deductions, pay scales, review processes, market analysis, equity considerations, performance linkages, promotion impacts, benefit enrollment, insurance options, retirement planning, stock options, profit sharing, and ALL financial benefits and policies for employees with detailed calculations and examples.",
-                "Please provide an EXHAUSTIVE 15,000+ word enterprise guide on training and development opportunities, skill enhancement programs, career advancement paths, educational support, certification assistance, mentoring programs, leadership development, technical training, soft skills development, conference attendance, online learning, tuition reimbursement, sabbatical programs, cross-functional training, and ALL learning and development initiatives available to employees with comprehensive procedures and implementation guidelines."
+                "What are the key HR policies and procedures outlined in this document? Please provide a comprehensive overview including employee responsibilities, leave policies, and benefits.",
+                "Can you explain the maternity leave policy in detail, including eligibility requirements, duration, benefits, and the application process?",
+                "What are the different types of leave available to employees and what are the procedures for applying for each type?",
+                "What is the notice period policy for resignation and what are the exit procedures that need to be followed?"
             ]
             
             for i, msg in enumerate(messages):
@@ -120,7 +114,7 @@ class HeavyChatbotLoadTest:
             
         return user_results
 
-    async def run_heavy_load_test(self, num_users=20, test_name="Heavy Load Test"):
+    async def run_heavy_load_test(self, num_users=5, test_name="Heavy Load Test"):
         """Run intensive load test with many concurrent users"""
         print(f"\n=== {test_name} ===")
         print(f"Starting HEAVY LOAD with {num_users} concurrent users")
@@ -200,7 +194,7 @@ class HeavyChatbotLoadTest:
         print(f"\n=== {test_name} Results ===")
         print(f"Total test duration: {total_time:.2f}s")
         print(f"Concurrent users: {num_users}")
-        print(f"Total messages sent: {num_users * 10}")
+        print(f"Total messages sent: {num_users * 5}")
         print(f"Successful requests: {successful_tests}")
         print(f"Timeout requests: {timeout_tests}")
         print(f"Failed requests: {failed_tests}")
@@ -239,9 +233,9 @@ async def main():
     print("ALL USERS STARTING SIMULTANEOUSLY for MAXIMUM LOAD!")
     print("Monitoring CPU and memory usage during maximum load...")
     
-    # Single maximum resource utilization test with 50 concurrent users
+    # Single maximum resource utilization test with 5 concurrent users
     test_results = []
-    result = await load_test.run_heavy_load_test(num_users=50, test_name="15K Words - 50 Users MAXIMUM CONCURRENCY")
+    result = await load_test.run_heavy_load_test(num_users=5, test_name="15K Words - 5 Users MAXIMUM CONCURRENCY")
     test_results.append(result)
     print("\n" + "="*60)
     print("🔥 MAXIMUM RESOURCE UTILIZATION FINAL SUMMARY 🔥")

@@ -19,8 +19,8 @@ VECTOR_STORE_INDEX_NAME = os.environ.get("VECTOR_STORE_INDEX_NAME", "faiss_index
 
 # --- RAG ---
 
-CHUNK_SIZE = int(os.environ.get("CHUNK_SIZE", 512))  # Optimized for gemma3:1b
-CHUNK_OVERLAP = int(os.environ.get("CHUNK_OVERLAP", 50))
+CHUNK_SIZE = int(os.environ.get("CHUNK_SIZE", 256))  # Smaller chunks for faster processing on 2-core VM
+CHUNK_OVERLAP = int(os.environ.get("CHUNK_OVERLAP", 25))  # Reduced overlap for less computation
 TOP_K_RESULTS = int(os.environ.get("TOP_K_RESULTS", 1))  # Single best result for speed
 
 
@@ -30,7 +30,7 @@ OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "gemma3:1b")
 
 
 # --- Chat History ---
-MAX_CONVERSATION_HISTORY = int(os.environ.get("MAX_CONVERSATION_HISTORY", 5))
+MAX_CONVERSATION_HISTORY = int(os.environ.get("MAX_CONVERSATION_HISTORY", 3))  # Reduced for faster context processing
 
 # --- Prompt Template ---
 PROMPT_TEMPLATE = os.environ.get("PROMPT_TEMPLATE", """You are Gia (Gentari Intelligence Assistant), a helpful HR assistant. Answer questions using ONLY the provided context.

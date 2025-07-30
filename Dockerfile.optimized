@@ -1,0 +1,43 @@
+# Optimized Dockerfile for 2-core, 8GB RAM VM
+FROM python:3.11-slim
+
+# Set environment variables for optimization
+ENV PYTHONOPTIMIZE=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    OMP_NUM_THREADS=2 \
+    MKL_NUM_THREADS=2 \
+    NUMEXPR_NUM_THREADS=2 \
+    OPENBLAS_NUM_THREADS=2 \
+    TOKENIZERS_PARALLELISM=false
+
+# Install system dependencies (minimal)
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Set working directory
+WORKDIR /app
+
+# Copy requirements first for better caching
+COPY requirements_optimized.txt .
+RUN pip install --no-cache-dir -r requirements_optimized.txt
+
+# Copy application code
+COPY . .
+
+# Create non-root user for security
+RUN useradd -m -u 1000 chatbot && chown -R chatbot:chatbot /app
+USER chatbot
+
+# Expose port
+EXPOSE 5173
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:5173/ || exit 1
+
+# Use optimized startup
+CMD ["python", "run_optimized.py"]
