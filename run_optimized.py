@@ -51,6 +51,7 @@ def main() -> None:
     log.info(f"🚀 Starting optimized Flask-SocketIO server on {cpu_count}-core VM")
     log.info(f"💾 Available RAM: {memory.total/1024**3:.2f}GB (Free: {memory.available/1024**3:.2f}GB)")
     log.info(f"🔧 Memory monitoring enabled - alerts at >85% usage")
+    log.info(f"🤖 Embedding model (all-MiniLM-L6-v2) will be preloaded during startup...")
     
     # Configure eventlet for lower memory usage
     eventlet.wsgi.HttpProtocol.default_request_version = "HTTP/1.0"

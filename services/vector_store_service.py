@@ -25,6 +25,11 @@ class VectorStoreService:
         self.index: Optional[Any] = None
         self.documents: Optional[List[str]] = None
         self.lock = threading.Lock()  # For thread safety
+        
+        # Preload the embedding model to avoid delay on first message
+        log.info("Preloading embedding model during initialization...")
+        self._get_embedding_model()
+        log.info("Embedding model preloaded successfully")
 
     def _get_embedding_model(self) -> SentenceTransformer:
         """Loads the sentence transformer model (thread-safe and memory-optimized)."""

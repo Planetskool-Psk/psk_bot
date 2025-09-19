@@ -23,7 +23,8 @@ def create_app() -> Any:
     socketio.init_app(app, async_mode="eventlet")
 
     with app.app_context():
-        log.info("Initializing RAG Service...")
+        log.info("Initializing RAG Service and preloading models...")
         app.rag_service = RAGService()
+        log.info("RAG Service initialization completed")
         from . import routes
     return app
