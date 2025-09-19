@@ -330,34 +330,44 @@ curl http://localhost:5173
 
 ```
 chatbot_be/
-├── app/                          # Flask application
-│   ├── __init__.py
-│   └── routes.py                 # WebSocket routes
-├── config.py                     # Configuration settings
-├── data/                         # Document storage
+├── gentari_bot/                 # Application package
+│   ├── __init__.py              # Flask factory + Socket.IO wiring
+│   ├── extensions.py            # Extension instances
+│   ├── logging.py               # Logging helpers
+│   ├── settings.py              # Central configuration
+│   ├── core/
+│   │   └── conversation.py      # Session history management
+│   ├── ingestion/
+│   │   └── pdf.py               # Document parsing utilities
+│   ├── services/                # Domain services
+│   │   ├── ollama.py            # LLM integration
+│   │   ├── rag.py               # RAG pipeline
+│   │   └── vector_store.py      # Vector database
+│   ├── web/
+│   │   └── routes.py            # HTTP routes
+│   ├── websocket/
+│   │   └── events.py            # Socket.IO handlers
+│   └── templates/
+│       └── index.html           # Web interface
+├── config.py                    # Compatibility config exports
+├── data/                        # Document storage
 │   └── your_document.pdf
-├── requirements.txt              # Standard dependencies
-├── requirements_optimized.txt    # Optimized dependencies
-├── Dockerfile                    # Docker configuration
-├── run.py                       # Standard startup script
-├── run_optimized.py             # Optimized startup script
-├── start_optimized.sh           # Optimized startup with monitoring
-├── setup_optimized.sh           # One-click optimization setup
+├── requirements.txt             # Standard dependencies
+├── requirements_optimized.txt   # Optimised dependencies
+├── Dockerfile                   # Docker configuration
+├── run.py                       # Development entrypoint
+├── run_optimized.py             # Optimised startup script
+├── start_optimized.sh           # Optimised startup with monitoring
+├── setup_optimized.sh           # One-click optimisation setup
 ├── monitor_system.py            # Real-time performance monitoring
 ├── scripts/
-│   └── ingest.py               # Document ingestion
-├── services/                   # Core services
-│   ├── ollama_service.py       # LLM integration
-│   ├── rag_service.py          # RAG pipeline
-│   └── vector_store_service.py # Vector database
-├── templates/
-│   └── index.html              # Web interface
-├── utils/                      # Utilities
-│   ├── logger.py              # Logging configuration
-│   └── pdf_parser.py          # Document parsing
-├── vector_store/               # FAISS vector database
+│   ├── ingest.py                # Document ingestion
+│   └── ingest_enhanced.py       # Enhanced ingestion workflow
+├── utils/
+│   └── logger.py                # Logging compatibility shim
+├── vector_store/                # FAISS vector database
 │   └── faiss_index/
-├── .env                        # Environment configuration
+├── .env                         # Environment configuration
 ├── .env.optimized             # Optimized environment settings
 └── README.md                  # This file
 ```

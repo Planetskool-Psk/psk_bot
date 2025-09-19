@@ -1,69 +1,55 @@
-# /rag-chatbot-ollama/scripts/ingest.py
+"""Document ingestion helper."""
 
-import sys
 import os
-
-# Add project root to Python path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from utils.pdf_parser import parse_pdf, chunk_text
-from services.vector_store_service import VectorStoreService
-from utils.logger import log
-import config
-
-
-
+import sys
 import time
+from pathlib import Path
 
-def main():
-    """Main ingestion script with performance timing."""
+# Ensure project root on path when running as a script
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.append(str(PROJECT_ROOT))
+
+import config
+from gentari_bot.ingestion.pdf import chunk_text, parse_pdf
+from gentari_bot.services import VectorStoreService
+from utils.logger import log
+
+
+def main() -> None:
+    """Ingest PDF content into the vector store."""
     log.info("Starting ingestion process...")
 
-    if not os.path.exists(config.PDF_PATH):
-        log.error(f"PDF file not found at: {config.PDF_PATH}")
-        log.error(
-            "Please place your PDF in the 'data' directory and update 'config.py'."
-        )
+    pdf_path = Path(config.PDF_PATH)
+    if not pdf_path.exists():
+        log.error("PDF file not found at: %s", pdf_path)
+        log.error("Place your PDF in the 'data' directory or update the PDF_PATH env var.")
         return
 
-    # 1. Parse PDF
-    t0 = time.perf_counter()
-    document_text = parse_pdf(config.PDF_PATH)
-    t1 = time.perf_counter()
-    parse_time = t1 - t0
+    start = time.perf_counter()
+    document_text = parse_pdf(pdf_path)
     if not document_text:
         log.error("Failed to extract text from PDF. Aborting.")
         return
-    log.info(f"PDF parsed in {parse_time:.2f} seconds.")
-    if parse_time > 5:
-        log.warning(f"PDF parsing took longer than 5 seconds: {parse_time:.2f}s")
+    parse_time = time.perf_counter() - start
+    log.info("PDF parsed in %.2f seconds", parse_time)
 
-    # 2. Chunk Text
-    t2 = time.perf_counter()
+    chunks_start = time.perf_counter()
     chunks = chunk_text(document_text)
-    t3 = time.perf_counter()
-    chunk_time = t3 - t2
     if not chunks:
         log.error("Failed to chunk text. Aborting.")
         return
-    log.info(f"Text chunked in {chunk_time:.2f} seconds.")
-    if chunk_time > 5:
-        log.warning(f"Text chunking took longer than 5 seconds: {chunk_time:.2f}s")
+    chunk_time = time.perf_counter() - chunks_start
+    log.info("Text chunked in %.2f seconds", chunk_time)
 
-    # 3. Create and Save Vector Store
-    t4 = time.perf_counter()
+    vector_start = time.perf_counter()
     vector_store = VectorStoreService()
     vector_store.create_and_save_store(chunks)
-    t5 = time.perf_counter()
-    vector_time = t5 - t4
-    log.info(f"Vector store created and saved in {vector_time:.2f} seconds.")
-    if vector_time > 5:
-        log.warning(f"Vector store creation took longer than 5 seconds: {vector_time:.2f}s")
+    vector_time = time.perf_counter() - vector_start
+    log.info("Vector store created and saved in %.2f seconds", vector_time)
 
-    total_time = t5 - t0
-    log.info(f"Ingestion process completed successfully in {total_time:.2f} seconds!")
-    if total_time > 5:
-        log.warning(f"Total ingestion time exceeded 5 seconds: {total_time:.2f}s")
+    total_time = time.perf_counter() - start
+    log.info("Ingestion completed successfully in %.2f seconds", total_time)
 
 
 if __name__ == "__main__":

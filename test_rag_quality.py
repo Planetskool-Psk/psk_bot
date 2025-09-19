@@ -8,7 +8,7 @@ import os
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from services.rag_service import RAGService
+from gentari_bot.services import RAGService
 from utils.logger import log
 import time
 
@@ -49,7 +49,7 @@ def test_rag_quality():
     
     rag_service = RAGService()
     
-    if not rag_service.is_ready:
+    if not rag_service.ready:
         log.error("❌ RAG service not ready. Please run document ingestion first.")
         return
     
