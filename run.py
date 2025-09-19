@@ -4,10 +4,10 @@ import os
 
 import eventlet
 
+eventlet.monkey_patch()
+
 from gentari_bot import create_app, socketio
 from gentari_bot.logging import get_logger
-
-eventlet.monkey_patch()
 
 logger = get_logger(__name__)
 app = create_app()

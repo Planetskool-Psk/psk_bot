@@ -10,9 +10,6 @@ from typing import NoReturn
 import eventlet
 import psutil
 
-from gentari_bot import create_app, socketio
-from gentari_bot.logging import get_logger
-
 # Configure worker-friendly defaults before importing heavy libraries
 os.environ.setdefault("OMP_NUM_THREADS", "2")
 os.environ.setdefault("MKL_NUM_THREADS", "2")
@@ -22,6 +19,9 @@ os.environ.setdefault("VECLIB_MAXIMUM_THREADS", "2")
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
 eventlet.monkey_patch()
+
+from gentari_bot import create_app, socketio
+from gentari_bot.logging import get_logger
 
 logger = get_logger(__name__)
 app = create_app()
