@@ -1,9 +1,12 @@
 """Vector store management backed by FAISS."""
 
+import os
 import pickle
 from pathlib import Path
 from threading import Lock
 from typing import Any, Dict, Iterable, List, Optional
+
+os.environ.setdefault("FAISS_DISABLE_GPU", "1")
 
 import faiss
 import numpy as np
