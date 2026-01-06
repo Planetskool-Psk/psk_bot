@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import List, Optional, Union
 
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from pypdf import PdfReader
 
 from gentari_bot.logging import get_logger

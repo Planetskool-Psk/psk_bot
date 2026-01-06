@@ -10,6 +10,9 @@ A high-performance RAG (Retrieval-Augmented Generation) chatbot backend built wi
 - **Memory monitoring** with automatic alerts
 - **Performance tracking** and system monitoring
 - **Streaming responses** for better user experience
+- **Session-safe streaming** (per-user locks to avoid overload on small VMs)
+- **Response + embedding caching** to speed up repeated questions
+- **Health + REST API endpoints** for easier operations and monitoring
 
 ## 📋 Prerequisites
 
@@ -43,9 +46,12 @@ curl -fsSL https://ollama.com/install.sh | sh
 # Start Ollama service
 ollama serve &
 
-# Pull the lightweight model (optimized for 2-core VM)
+# Pull the LLM model (optimized for 2-core VM)
 ollama pull gemma3:1b
 ```
+
+**Embedding Model:**
+The project uses `nomic-ai/nomic-embed-text-v1.5` from HuggingFace - a high-quality 768-dimensional embedding model optimized for retrieval tasks. It will be automatically downloaded when you run document ingestion.
 
 ### Step 3: Set Up Python Virtual Environment
 ```bash
@@ -63,9 +69,6 @@ pip install --upgrade pip
 ```bash
 # Install required Python packages
 pip install -r requirements.txt
-
-# Or use optimized requirements for better performance
-pip install -r requirements_optimized.txt
 ```
 
 ### Step 5: Prepare Your Documents
@@ -76,6 +79,7 @@ cp /path/to/your/document.pdf data/your_document.pdf
 # Run the document ingestion script
 python3 scripts/ingest.py
 ```
+- If you update the codebase, re-run the ingestion script to rebuild the FAISS index with the latest settings and metadata.
 
 ### Step 6: Configure Environment (Optimized Setup)
 ```bash
@@ -92,16 +96,7 @@ This will:
 
 ## 🎯 Running the Project
 
-### Option 1: Quick Start (Optimized for 2-Core VM)
-```bash
-# Make startup script executable
-chmod +x start_optimized.sh
-
-# Start the optimized chatbot
-./start_optimized.sh
-```
-
-### Option 2: Standard Startup
+### Standard Mode
 ```bash
 # Activate virtual environment
 source venv/bin/activate
@@ -110,14 +105,35 @@ source venv/bin/activate
 python3 run.py
 ```
 
-### Option 3: Performance Monitoring Mode
+### Optimized Mode (for 2-Core, 8GB RAM VMs)
 ```bash
-# Terminal 1: Start the optimized chatbot
+# Quick setup (first time only)
+chmod +x setup_optimized.sh
+./setup_optimized.sh
+
+# Start with optimizations
+chmod +x start_optimized.sh
+./start_optimized.sh
+```
+
+### Performance Monitoring
+```bash
+# Terminal 1: Start the chatbot
 ./start_optimized.sh
 
 # Terminal 2: Monitor system performance
 source venv/bin/activate
 python3 monitor_system.py
+```
+
+### Using Environment Variables
+```bash
+# Enable optimized mode
+export OPTIMIZED_MODE=true
+export PORT=5173
+
+# Run
+python3 run.py
 ```
 
 ## 🌐 Accessing the Application
@@ -127,6 +143,8 @@ Once the server is running, you can access the chatbot through:
 - **Local access**: http://localhost:5173
 - **Network access**: http://YOUR_VM_IP:5173
 - **Web interface**: Interactive chat interface with real-time responses
+- **Health**: `GET /healthz` for readiness (vector store + model)
+- **REST API**: `POST /api/chat` with JSON body `{"question": "...", "history": [...]}` returns `{response, latency_ms}`
 
 ## 📊 Performance Monitoring
 
@@ -152,79 +170,78 @@ This provides:
 ## ⚙️ Configuration
 
 ### Environment Variables (.env)
+
+Key configuration options:
+
 ```bash
-# Core application settings
+# Application
 DEBUG=false
 PORT=5173
+OPTIMIZED_MODE=false  # Set to true for 2-core VM optimizations
 
-# Model settings (optimized for 2-core VM)
+# Model settings
 OLLAMA_MODEL=gemma3:1b
 OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_KEEP_ALIVE=60s
 
-# Embedding model (lightweight)
-EMBEDDING_MODEL_NAME=all-MiniLM-L6-v2
+# Embedding model
+EMBEDDING_MODEL_NAME=nomic-ai/nomic-embed-text-v1.5  # Or: all-MiniLM-L6-v2
+EMBEDDING_BATCH_SIZE=16
 
-# RAG settings (optimized for speed)
+# RAG settings
 CHUNK_SIZE=256
 CHUNK_OVERLAP=25
 TOP_K_RESULTS=1
+CONTEXT_DOCUMENTS=2
 MAX_CONVERSATION_HISTORY=3
 
-# Performance optimizations
+# Performance (for optimized mode)
 OMP_NUM_THREADS=2
 MKL_NUM_THREADS=2
-NUMEXPR_NUM_THREADS=2
-OPENBLAS_NUM_THREADS=2
 TOKENIZERS_PARALLELISM=false
+
+# LLM Generation
+LLM_TIMEOUT=180
+LLM_NUM_PREDICT=640
+LLM_NUM_CTX=3072
+LLM_TEMPERATURE=0.35
 ```
 
-### Optimized vs Standard Configuration
-
-| Setting | Standard | Optimized (2-Core VM) | Benefit |
-|---------|----------|----------------------|---------|
-| Chunk Size | 512 | 256 | 40% faster processing |
-| Context Window | 4096 | 2048 | 50% memory reduction |
-| Conversation History | 5 | 3 | 20% memory saving |
-| Thread Count | 4 | 2 | Better CPU utilization |
-| Response Limit | Unlimited | 512 tokens | Faster responses |
+For detailed optimization settings, see [docs/OPTIMIZATION.md](docs/OPTIMIZATION.md).
 
 ## 🐳 Docker Deployment
 
-### Build and Run
+### Standard Deployment
 ```bash
 # Build Docker image
-docker build -t chatbot-backend .
+docker build -t gentari-chatbot .
 
-# Run with resource limits (optimized for 2-core, 8GB VM)
+# Run container
 docker run -d \
-  --name chatbot \
+  --name gentari-chatbot \
+  -p 5173:5173 \
+  -v $(pwd)/data:/app/data \
+  -v $(pwd)/vector_store:/app/vector_store \
+  gentari-chatbot
+```
+
+### Optimized Deployment (2-Core, 8GB RAM VMs)
+```bash
+# Run with resource limits and optimizations
+docker run -d \
+  --name gentari-chatbot \
   -p 5173:5173 \
   --memory=6g \
   --cpus=2 \
+  -e OPTIMIZED_MODE=true \
+  -e OMP_NUM_THREADS=2 \
+  -e MKL_NUM_THREADS=2 \
   -v $(pwd)/data:/app/data \
   -v $(pwd)/vector_store:/app/vector_store \
-  chatbot-backend
+  gentari-chatbot
 ```
 
-### Docker Compose
-```yaml
-version: '3.8'
-services:
-  chatbot:
-    build: .
-    ports:
-      - "5173:5173"
-    volumes:
-      - ./data:/app/data
-      - ./vector_store:/app/vector_store
-    deploy:
-      resources:
-        limits:
-          memory: 6G
-          cpus: '2'
-    environment:
-      - OLLAMA_BASE_URL=http://host.docker.internal:11434
-```
+For more deployment options, see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 ## 🔧 Troubleshooting
 
@@ -329,47 +346,46 @@ curl http://localhost:5173
 ## 📁 Project Structure
 
 ```
-chatbot_be/
-├── gentari_bot/                 # Application package
+gentari-bot/
+├── gentari_bot/                 # Main application package
 │   ├── __init__.py              # Flask factory + Socket.IO wiring
-│   ├── extensions.py            # Extension instances
-│   ├── logging.py               # Logging helpers
-│   ├── settings.py              # Central configuration
+│   ├── container.py             # Dependency injection container
+│   ├── extensions.py            # Flask extensions
+│   ├── logging.py               # Logging configuration
+│   ├── settings.py              # Centralized configuration
 │   ├── core/
 │   │   └── conversation.py      # Session history management
 │   ├── ingestion/
-│   │   └── pdf.py               # Document parsing utilities
+│   │   ├── pdf.py               # Document parsing utilities
+│   │   └── pipeline.py          # Ingestion pipeline
 │   ├── services/                # Domain services
 │   │   ├── ollama.py            # LLM integration
 │   │   ├── rag.py               # RAG pipeline
-│   │   └── vector_store.py      # Vector database
+│   │   └── vector_store.py      # Vector database operations
 │   ├── web/
-│   │   └── routes.py            # HTTP routes
+│   │   └── routes.py            # HTTP routes (UI, health, REST)
 │   ├── websocket/
-│   │   └── events.py            # Socket.IO handlers
+│   │   └── events.py            # Socket.IO event handlers
 │   └── templates/
 │       └── index.html           # Web interface
-├── config.py                    # Compatibility config exports
+├── scripts/                     # Utility scripts
+│   ├── ingest.py                # Basic document ingestion
+│   └── ingest_enhanced.py       # Enhanced ingestion with tests
+├── docs/                        # Documentation
+│   ├── DEPLOYMENT.md            # Deployment guide
+│   └── OPTIMIZATION.md          # Performance optimization guide
 ├── data/                        # Document storage
-│   └── your_document.pdf
-├── requirements.txt             # Standard dependencies
-├── requirements_optimized.txt   # Optimised dependencies
-├── Dockerfile                   # Docker configuration
-├── run.py                       # Development entrypoint
-├── run_optimized.py             # Optimised startup script
-├── start_optimized.sh           # Optimised startup with monitoring
-├── setup_optimized.sh           # One-click optimisation setup
-├── monitor_system.py            # Real-time performance monitoring
-├── scripts/
-│   ├── ingest.py                # Document ingestion
-│   └── ingest_enhanced.py       # Enhanced ingestion workflow
-├── utils/
-│   └── logger.py                # Logging compatibility shim
 ├── vector_store/                # FAISS vector database
 │   └── faiss_index/
 ├── .env                         # Environment configuration
-├── .env.optimized             # Optimized environment settings
-└── README.md                  # This file
+├── .gitignore                   # Git ignore rules
+├── Dockerfile                   # Docker configuration
+├── requirements.txt             # Python dependencies
+├── run.py                       # Application entrypoint
+├── monitor_system.py            # System performance monitoring
+├── start_optimized.sh           # Optimized startup script
+├── setup_optimized.sh           # Optimization setup script
+└── README.md                    # This file
 ```
 
 ## 🤝 Contributing
@@ -394,10 +410,11 @@ For support and questions:
 
 ## 📚 Additional Resources
 
+- [Deployment Guide](docs/DEPLOYMENT.md) - Docker and production deployment
+- [Optimization Guide](docs/OPTIMIZATION.md) - Performance tuning for constrained environments
 - [Ollama Documentation](https://ollama.com/docs)
 - [Flask-SocketIO Documentation](https://flask-socketio.readthedocs.io/)
 - [FAISS Documentation](https://faiss.ai/)
-- [Performance Optimization Guide](OPTIMIZATION_GUIDE.md)
 
 ---
 

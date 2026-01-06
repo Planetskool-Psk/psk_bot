@@ -1,32 +1,44 @@
 """Gentari Bot application factory."""
 
 from pathlib import Path
-from flask import Flask
+from typing import TYPE_CHECKING
 
-from gentari_bot.extensions import socketio
 from gentari_bot.logging import configure_logging, get_logger
-from gentari_bot.services import RAGService
 from gentari_bot.settings import settings
 from gentari_bot.web import bp as web_bp
+
+if TYPE_CHECKING:
+    from flask import Flask
+
+try:
+    from gentari_bot.extensions import socketio
+except Exception:  # pragma: no cover - allows ingestion without web deps installed
+    socketio = None  # type: ignore[assignment]
 
 configure_logging()
 logger = get_logger(__name__)
 
 
-def create_app() -> Flask:
+def create_app() -> "Flask":
     """Create and configure the Flask application."""
+    from flask import Flask  # Local import to avoid hard dependency during non-web tasks
+    from gentari_bot.container import build_container
+    from gentari_bot.extensions import socketio as ext_socketio
+
     template_folder = Path(__file__).resolve().parent / "templates"
     app = Flask(__name__, template_folder=str(template_folder))
     app.config["SECRET_KEY"] = settings.secret_key
     app.config["APP_SETTINGS"] = settings
 
-    socketio.init_app(app, async_mode="eventlet")
+    ext_socketio.init_app(app, async_mode="eventlet")
     app.register_blueprint(web_bp)
 
     # Initialise long-lived services once at startup
-    rag_service = RAGService()
-    app.extensions["rag_service"] = rag_service
-    if rag_service.ready:
+    services = build_container(settings)
+    app.extensions["services"] = services
+    app.extensions["rag_service"] = services.rag_service  # Backwards compatibility
+    app.extensions["conversation_store"] = services.conversation_store
+    if services.rag_service.ready:
         logger.info("RAG service initialised and ready")
     else:
         logger.warning("RAG service initialised but not ready")

@@ -19,25 +19,6 @@ if [ -f ".env" ]; then
     cp .env .env.backup
 fi
 
-# Use optimized environment
-echo "⚙️  Setting up optimized environment configuration..."
-cp .env.optimized .env
-
-# Set system optimizations
-echo "🚀 Applying system optimizations..."
-export MALLOC_ARENA_MAX=2
-export PYTHONOPTIMIZE=1
-
-# Check if we should install optimized requirements
-if [ -f "requirements_optimized.txt" ]; then
-    read -p "📋 Install optimized requirements? (y/N): " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        echo "📦 Installing optimized requirements..."
-        pip3 install -r requirements_optimized.txt
-    fi
-fi
-
 echo ""
 echo "✅ Setup complete! You can now run:"
 echo "   ./start_optimized.sh    # Start the optimized chatbot"

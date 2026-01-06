@@ -5,20 +5,19 @@ from typing import Dict, Generator, Optional, Union
 import ollama
 
 from gentari_bot.logging import get_logger
-from gentari_bot.settings import settings
+from gentari_bot.settings import AppSettings, settings
 
 logger = get_logger(__name__)
 
-DEFAULT_GENERATION_OPTIONS: Dict[str, Union[int, float]] = {
-    "temperature": 0.7,
-    "top_p": 0.9,
-    "top_k": 30,
-    "num_ctx": 3072,
-    "num_predict": 800,
-    "repeat_penalty": 1.1,
-    "repeat_last_n": 64,
-    "num_thread": 2,
-    "num_gpu": 0,
+# Baseline generation options; tuned for maximum speed on CPU
+DEFAULT_GENERATION_OPTIONS: Dict[str, Union[int, float, bool]] = {
+    "num_gpu": 0,  # CPU only
+    "num_batch": 128,  # Small batch for low RAM
+    "repeat_penalty": 1.0,  # No penalty = fastest
+    "repeat_last_n": 0,  # Disabled
+    "mirostat": 0,  # Disabled
+    "num_keep": 0,  # Don't cache
+    "seed": 42,  # Fixed seed = faster, consistent
 }
 
 
@@ -28,14 +27,21 @@ class OllamaService:
     def __init__(
         self,
         *,
+        config: AppSettings = settings,
         base_url: Optional[str] = None,
         model: Optional[str] = None,
-        timeout: int = 180,
+        timeout: Optional[int] = None,
+        options: Optional[Dict[str, Union[int, float]]] = None,
     ) -> None:
-        self._base_url = base_url or settings.ollama_base_url
-        self._model = model or settings.ollama_model
-        self._timeout = timeout
+        self._config = config
+        self._base_url = base_url or config.ollama_base_url
+        self._model = model or config.ollama_model
+        self._timeout = timeout or config.llm_timeout
         self._client: Optional[ollama.Client] = None
+        self._options = {**DEFAULT_GENERATION_OPTIONS, **config.ollama_options}
+        if options:
+            self._options.update(options)
+        self._keep_alive = config.ollama_keep_alive
         self._initialise_client()
 
     def _initialise_client(self) -> None:
@@ -59,7 +65,8 @@ class OllamaService:
                 model=self._model,
                 messages=[{"role": "user", "content": prompt}],
                 stream=True,
-                options=DEFAULT_GENERATION_OPTIONS,
+                options=self._options,
+                keep_alive=self._keep_alive,
             )
             for chunk in stream:
                 content = chunk.get("message", {}).get("content")

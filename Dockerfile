@@ -1,23 +1,40 @@
-# Dockerfile for chatbot_be
-FROM python:3.12-slim
+# Multi-stage Dockerfile for Gentari RAG Chatbot
+# Supports both standard and optimized deployment modes
+FROM python:3.11-slim as base
+
+# Set base environment variables
+ENV PYTHONOPTIMIZE=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+# Install system dependencies (minimal)
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
 
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y build-essential && rm -rf /var/lib/apt/lists/*
+# Copy requirements and install dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
 
-# Copy requirements and install
-COPY requirements.txt ./
-RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt
-
-# Copy the rest of the code
+# Copy application code
 COPY . .
 
+# Create non-root user for security
+RUN useradd -m -u 1000 chatbot && chown -R chatbot:chatbot /app
+USER chatbot
+
 # Expose port
-EXPOSE 5000
+EXPOSE 5173
 
-# Set environment variables
-ENV PYTHONUNBUFFERED=1
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:5173/healthz || exit 1
 
-# Run the app with Gunicorn and eventlet for async
-CMD ["gunicorn", "run:app", "-k", "eventlet", "-b", "0.0.0.0:5000", "--timeout", "120"]
+# Default to standard mode (can be overridden with env vars)
+CMD ["python", "run.py"]
