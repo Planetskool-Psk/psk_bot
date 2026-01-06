@@ -1,421 +1,372 @@
-# RAG Chatbot Backend - Optimized for 2-Core, 8GB RAM VM
+# Gia - Gentari HR Assistant
 
-A high-performance RAG (Retrieval-Augmented Generation) chatbot backend built with Flask, SocketIO, and Ollama, specifically optimized for resource-constrained environments.
+A high-performance RAG (Retrieval-Augmented Generation) chatbot built with Flask and Ollama, featuring real-time streaming responses and a professional chat interface.
 
 ## 🚀 Features
 
-- **Real-time chat** via WebSocket connections
-- **Document-based RAG** using FAISS vector store
-- **Optimized for low-resource VMs** (2 cores, 8GB RAM)
-- **Memory monitoring** with automatic alerts
-- **Performance tracking** and system monitoring
-- **Streaming responses** for better user experience
-- **Session-safe streaming** (per-user locks to avoid overload on small VMs)
-- **Response + embedding caching** to speed up repeated questions
-- **Health + REST API endpoints** for easier operations and monitoring
+- **Real-time streaming** - Character-by-character response streaming directly from Ollama
+- **Document-based RAG** - FAISS vector store for semantic search across HR documents
+- **Live text formatting** - Markdown formatting (bold, bullets, links) applied during streaming
+- **Smart greeting detection** - Quick responses for casual greetings without RAG lookup
+- **Professional UI** - Clean, modern chat interface with typing animations
+- **Optimized for speed** - Configured for fast responses on CPU-only environments
+- **REST API** - Health checks and chat endpoints for integration
 
 ## 📋 Prerequisites
 
-Before you begin, ensure you have the following installed on your system:
-
 ### System Requirements
-- **Operating System**: Linux (Ubuntu/Debian recommended)
-- **Hardware**: Minimum 2 CPU cores, 8GB RAM
-- **Python**: 3.8 or higher
-- **Ollama**: For LLM inference
+- **OS**: macOS, Linux (Ubuntu/Debian), or Windows with WSL
+- **Hardware**: Minimum 4 CPU cores, 8GB RAM recommended
+- **Python**: 3.10 or higher
+- **Ollama**: For LLM and embedding inference
 
 ### Required Software
-1. **Python 3.8+**
-2. **pip** (Python package installer)
-3. **Ollama** (Large Language Model runtime)
-4. **Git** (for cloning the repository)
+1. **Python 3.10+** with pip
+2. **Ollama** (LLM runtime)
+3. **Git** (for cloning)
 
 ## 🛠️ Installation & Setup
 
 ### Step 1: Clone the Repository
 ```bash
 git clone <your-repository-url>
-cd chatbot_be
+cd "Gentari Bot"
 ```
 
 ### Step 2: Install Ollama
+
+**macOS:**
 ```bash
-# Install Ollama
-curl -fsSL https://ollama.com/install.sh | sh
-
-# Start Ollama service
-ollama serve &
-
-# Pull the LLM model (optimized for 2-core VM)
-ollama pull gemma3:1b
+brew install ollama
 ```
 
-**Embedding Model:**
-The project uses `nomic-ai/nomic-embed-text-v1.5` from HuggingFace - a high-quality 768-dimensional embedding model optimized for retrieval tasks. It will be automatically downloaded when you run document ingestion.
+**Linux:**
+```bash
+curl -fsSL https://ollama.com/install.sh | sh
+```
 
-### Step 3: Set Up Python Virtual Environment
+**Start Ollama service:**
+```bash
+ollama serve
+```
+
+### Step 3: Pull Required Models
+```bash
+# Pull the LLM model (lightweight, fast responses)
+ollama pull qwen2.5:0.5b
+
+# Pull the embedding model
+ollama pull nomic-embed-text
+```
+
+> **Note:** The `qwen2.5:0.5b` model (397MB) is optimized for speed. For better quality responses, you can use `qwen2.5:1.5b` or `gemma3:1b` instead.
+
+### Step 4: Set Up Python Environment
 ```bash
 # Create virtual environment
 python3 -m venv venv
 
 # Activate virtual environment
-source venv/bin/activate
+source venv/bin/activate  # macOS/Linux
+# or
+.\venv\Scripts\activate   # Windows
 
 # Upgrade pip
 pip install --upgrade pip
 ```
 
-### Step 4: Install Dependencies
+### Step 5: Install Dependencies
 ```bash
-# Install required Python packages
 pip install -r requirements.txt
 ```
 
-### Step 5: Prepare Your Documents
+### Step 6: Prepare Your Documents
 ```bash
-# Place your PDF document in the data folder
-cp /path/to/your/document.pdf data/your_document.pdf
+# Create data folder if it doesn't exist
+mkdir -p data
 
-# Run the document ingestion script
+# Place your HR document(s) in the data folder
+cp /path/to/your/hr_handbook.pdf data/
+
+# Run document ingestion to build the vector store
 python3 scripts/ingest.py
 ```
-- If you update the codebase, re-run the ingestion script to rebuild the FAISS index with the latest settings and metadata.
 
-### Step 6: Configure Environment (Optimized Setup)
+The ingestion script will:
+- Parse PDF documents from the `data/` folder
+- Chunk text into searchable segments
+- Generate embeddings using `nomic-embed-text`
+- Store vectors in FAISS index under `vector_store/faiss_index/`
+
+### Step 7: Configure Environment (Optional)
 ```bash
-# Run the optimization setup script
-chmod +x setup_optimized.sh
-./setup_optimized.sh
+# Copy the example environment file
+cp .env.example .env
+
+# Edit settings as needed
+nano .env
 ```
 
-This will:
-- Backup your current `.env` file
-- Apply optimized environment configuration
-- Set up performance monitoring
-- Configure threading for 2-core VM
+## 🎯 Running the Application
 
-## 🎯 Running the Project
-
-### Standard Mode
+### Quick Start
 ```bash
+# Make sure Ollama is running
+ollama serve &
+
 # Activate virtual environment
 source venv/bin/activate
 
-# Start the application
+# Start the chatbot
 python3 run.py
 ```
 
-### Optimized Mode (for 2-Core, 8GB RAM VMs)
-```bash
-# Quick setup (first time only)
-chmod +x setup_optimized.sh
-./setup_optimized.sh
+The server will start at **http://localhost:5173**
 
-# Start with optimizations
+### Production Mode
+```bash
+# Set production environment
+export FLASK_ENV=production
+export DEBUG=false
+
+# Run with optimized settings
+python3 run.py
+```
+
+### Using the Optimized Startup Script
+```bash
 chmod +x start_optimized.sh
 ./start_optimized.sh
 ```
 
-### Performance Monitoring
-```bash
-# Terminal 1: Start the chatbot
-./start_optimized.sh
-
-# Terminal 2: Monitor system performance
-source venv/bin/activate
-python3 monitor_system.py
-```
-
-### Using Environment Variables
-```bash
-# Enable optimized mode
-export OPTIMIZED_MODE=true
-export PORT=5173
-
-# Run
-python3 run.py
-```
-
 ## 🌐 Accessing the Application
 
-Once the server is running, you can access the chatbot through:
+| Endpoint | Description |
+|----------|-------------|
+| `http://localhost:5173` | Chat web interface |
+| `GET /healthz` | Health check (RAG + vector store status) |
+| `POST /api/chat` | REST API for chat (JSON body) |
+| `POST /api/prepare` | Get RAG context for direct Ollama streaming |
+| `POST /api/stream` | Server-Sent Events streaming endpoint |
 
-- **Local access**: http://localhost:5173
-- **Network access**: http://YOUR_VM_IP:5173
-- **Web interface**: Interactive chat interface with real-time responses
-- **Health**: `GET /healthz` for readiness (vector store + model)
-- **REST API**: `POST /api/chat` with JSON body `{"question": "...", "history": [...]}` returns `{response, latency_ms}`
+### API Examples
 
-## 📊 Performance Monitoring
-
-The optimized version includes real-time system monitoring:
-
-### Built-in Memory Monitoring
-- Automatic alerts when memory usage exceeds 85%
-- Background garbage collection
-- Real-time RAM usage tracking
-
-### System Performance Monitor
+**Health Check:**
 ```bash
-# Run in separate terminal for real-time monitoring
-python3 monitor_system.py
+curl http://localhost:5173/healthz
 ```
 
-This provides:
-- CPU usage per core
-- Memory consumption breakdown
-- Python/Ollama process tracking
-- Performance recommendations
+**Chat API:**
+```bash
+curl -X POST http://localhost:5173/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{"question": "What is the leave policy?"}'
+```
 
 ## ⚙️ Configuration
 
-### Environment Variables (.env)
+### Key Environment Variables
 
-Key configuration options:
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PORT` | `5173` | Server port |
+| `DEBUG` | `false` | Debug mode |
+| `OLLAMA_MODEL` | `qwen2.5:0.5b` | LLM model for responses |
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server URL |
+| `LLM_NUM_PREDICT` | `200` | Max tokens per response |
+| `LLM_NUM_CTX` | `1024` | Context window size |
+| `LLM_TEMPERATURE` | `0.0` | Response randomness (0 = deterministic) |
+| `LLM_NUM_THREAD` | `4` | CPU threads for inference |
+| `TOP_K_RESULTS` | `2` | Number of documents to retrieve |
+| `CHUNK_SIZE` | `200` | Document chunk size |
 
+### Performance Tuning
+
+For faster responses on CPU:
 ```bash
-# Application
-DEBUG=false
-PORT=5173
-OPTIMIZED_MODE=false  # Set to true for 2-core VM optimizations
-
-# Model settings
-OLLAMA_MODEL=gemma3:1b
-OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_KEEP_ALIVE=60s
-
-# Embedding model
-EMBEDDING_MODEL_NAME=nomic-ai/nomic-embed-text-v1.5  # Or: all-MiniLM-L6-v2
-EMBEDDING_BATCH_SIZE=16
-
-# RAG settings
-CHUNK_SIZE=256
-CHUNK_OVERLAP=25
-TOP_K_RESULTS=1
-CONTEXT_DOCUMENTS=2
-MAX_CONVERSATION_HISTORY=3
-
-# Performance (for optimized mode)
-OMP_NUM_THREADS=2
-MKL_NUM_THREADS=2
-TOKENIZERS_PARALLELISM=false
-
-# LLM Generation
-LLM_TIMEOUT=180
-LLM_NUM_PREDICT=640
-LLM_NUM_CTX=3072
-LLM_TEMPERATURE=0.35
+export LLM_NUM_PREDICT=100      # Shorter responses
+export LLM_NUM_CTX=512          # Smaller context
+export LLM_TEMPERATURE=0.0      # Deterministic (faster)
+export LLM_NUM_THREAD=4         # Match your CPU cores
 ```
 
-For detailed optimization settings, see [docs/OPTIMIZATION.md](docs/OPTIMIZATION.md).
-
-## 🐳 Docker Deployment
-
-### Standard Deployment
+For better quality responses:
 ```bash
-# Build Docker image
-docker build -t gentari-chatbot .
-
-# Run container
-docker run -d \
-  --name gentari-chatbot \
-  -p 5173:5173 \
-  -v $(pwd)/data:/app/data \
-  -v $(pwd)/vector_store:/app/vector_store \
-  gentari-chatbot
-```
-
-### Optimized Deployment (2-Core, 8GB RAM VMs)
-```bash
-# Run with resource limits and optimizations
-docker run -d \
-  --name gentari-chatbot \
-  -p 5173:5173 \
-  --memory=6g \
-  --cpus=2 \
-  -e OPTIMIZED_MODE=true \
-  -e OMP_NUM_THREADS=2 \
-  -e MKL_NUM_THREADS=2 \
-  -v $(pwd)/data:/app/data \
-  -v $(pwd)/vector_store:/app/vector_store \
-  gentari-chatbot
-```
-
-For more deployment options, see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
-
-## 🔧 Troubleshooting
-
-### Common Issues and Solutions
-
-#### 1. Ollama Connection Error
-```bash
-# Check if Ollama is running
-curl http://localhost:11434/api/tags
-
-# If not running, start Ollama
-ollama serve &
-
-# Verify model is available
-ollama list
-```
-
-#### 2. Memory Issues
-```bash
-# Check memory usage
-free -h
-
-# Monitor Python processes
-python3 monitor_system.py
-
-# Restart if memory usage > 80%
-./start_optimized.sh
-```
-
-#### 3. Port Already in Use
-```bash
-# Find process using port 5173
-sudo lsof -i :5173
-
-# Kill the process
-sudo kill -9 <PID>
-
-# Or use a different port
-export PORT=5174
-./start_optimized.sh
-```
-
-#### 4. Virtual Environment Issues
-```bash
-# Recreate virtual environment
-rm -rf venv
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-```
-
-#### 5. Document Ingestion Problems
-```bash
-# Check if PDF exists
-ls -la data/your_document.pdf
-
-# Re-run ingestion
-python3 scripts/ingest.py
-
-# Check vector store creation
-ls -la vector_store/faiss_index/
-```
-
-## 📈 Performance Optimization Tips
-
-### For 2-Core, 8GB RAM VMs:
-1. **Use the optimized startup script**: `./start_optimized.sh`
-2. **Monitor memory usage**: Keep below 85% for best performance
-3. **Keep conversations short**: Restart periodically for optimal performance
-4. **Use single questions**: Avoid complex, multi-part queries
-5. **Monitor with**: `python3 monitor_system.py`
-
-### Performance Benchmarks:
-- **Response Time**: 30-50 seconds (40% improvement)
-- **Memory Usage**: <12% peak (20% reduction)
-- **CPU Utilization**: Consistent 2-core usage
-- **Startup Time**: ~20 seconds (30% improvement)
-
-## 🧪 Testing
-
-### Load Testing
-```bash
-# Run performance tests
-python3 load_test.py
-
-# Heavy load testing
-python3 heavy_load_test.py
-
-# CPU stress testing
-python3 maximum_cpu_stress.py
-```
-
-### Manual Testing
-```bash
-# Test basic functionality
-curl http://localhost:5173
-
-# Test WebSocket connection
-# Use the web interface at http://localhost:5173
+export OLLAMA_MODEL=qwen2.5:1.5b  # Larger model
+export LLM_NUM_PREDICT=300        # Longer responses
+export LLM_NUM_CTX=2048           # More context
+export TOP_K_RESULTS=3            # More documents
 ```
 
 ## 📁 Project Structure
 
 ```
-gentari-bot/
+Gentari Bot/
 ├── gentari_bot/                 # Main application package
-│   ├── __init__.py              # Flask factory + Socket.IO wiring
-│   ├── container.py             # Dependency injection container
-│   ├── extensions.py            # Flask extensions
-│   ├── logging.py               # Logging configuration
-│   ├── settings.py              # Centralized configuration
+│   ├── __init__.py              # Flask app factory
+│   ├── container.py             # Dependency injection
+│   ├── settings.py              # Configuration management
 │   ├── core/
-│   │   └── conversation.py      # Session history management
-│   ├── ingestion/
-│   │   ├── pdf.py               # Document parsing utilities
-│   │   └── pipeline.py          # Ingestion pipeline
-│   ├── services/                # Domain services
-│   │   ├── ollama.py            # LLM integration
+│   │   └── conversation.py      # Session history
+│   ├── services/
+│   │   ├── ollama.py            # LLM client
+│   │   ├── ollama_embeddings.py # Embedding service
 │   │   ├── rag.py               # RAG pipeline
-│   │   └── vector_store.py      # Vector database operations
+│   │   └── vector_store.py      # FAISS operations
 │   ├── web/
-│   │   └── routes.py            # HTTP routes (UI, health, REST)
+│   │   └── routes.py            # HTTP endpoints
 │   ├── websocket/
-│   │   └── events.py            # Socket.IO event handlers
+│   │   └── events.py            # Socket.IO handlers
 │   └── templates/
-│       └── index.html           # Web interface
-├── scripts/                     # Utility scripts
-│   ├── ingest.py                # Basic document ingestion
-│   └── ingest_enhanced.py       # Enhanced ingestion with tests
+│       └── index.html           # Chat UI
+├── scripts/
+│   ├── ingest.py                # Document ingestion
+│   └── ingest_enhanced.py       # Enhanced ingestion
+├── data/                        # PDF documents
+├── vector_store/
+│   └── faiss_index/             # FAISS index files
 ├── docs/                        # Documentation
-│   ├── DEPLOYMENT.md            # Deployment guide
-│   └── OPTIMIZATION.md          # Performance optimization guide
-├── data/                        # Document storage
-├── vector_store/                # FAISS vector database
-│   └── faiss_index/
-├── .env                         # Environment configuration
-├── .gitignore                   # Git ignore rules
-├── Dockerfile                   # Docker configuration
+├── run.py                       # Application entry point
 ├── requirements.txt             # Python dependencies
-├── run.py                       # Application entrypoint
-├── monitor_system.py            # System performance monitoring
-├── start_optimized.sh           # Optimized startup script
-├── setup_optimized.sh           # Optimization setup script
+├── Dockerfile                   # Docker configuration
 └── README.md                    # This file
 ```
 
-## 🤝 Contributing
+## 🐳 Docker Deployment
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+### Build and Run
+```bash
+# Build image
+docker build -t gia-chatbot .
+
+# Run container
+docker run -d \
+  --name gia-chatbot \
+  -p 5173:5173 \
+  -v $(pwd)/data:/app/data \
+  -v $(pwd)/vector_store:/app/vector_store \
+  gia-chatbot
+```
+
+### With Resource Limits
+```bash
+docker run -d \
+  --name gia-chatbot \
+  -p 5173:5173 \
+  --memory=4g \
+  --cpus=4 \
+  -e OLLAMA_BASE_URL=http://host.docker.internal:11434 \
+  -v $(pwd)/data:/app/data \
+  -v $(pwd)/vector_store:/app/vector_store \
+  gia-chatbot
+```
+
+> **Note:** Ollama must be running on the host machine. Use `host.docker.internal` (macOS/Windows) or the host IP (Linux) for `OLLAMA_BASE_URL`.
+
+## 🔧 Troubleshooting
+
+### Ollama Connection Error
+```bash
+# Check if Ollama is running
+curl http://localhost:11434/api/tags
+
+# Start Ollama if not running
+ollama serve &
+
+# Verify models are available
+ollama list
+```
+
+### Slow Responses
+```bash
+# Check CPU usage
+top -l 1 | head -10
+
+# Use a smaller model
+ollama pull qwen2.5:0.5b
+export OLLAMA_MODEL=qwen2.5:0.5b
+
+# Reduce context size
+export LLM_NUM_CTX=512
+export LLM_NUM_PREDICT=100
+```
+
+### Vector Store Issues
+```bash
+# Check if index exists
+ls -la vector_store/faiss_index/
+
+# Re-run ingestion
+python3 scripts/ingest.py
+
+# Check document count in logs
+# Should show "Vector store loaded: X documents"
+```
+
+### Port Already in Use
+```bash
+# Find process using port
+lsof -i :5173
+
+# Kill process
+kill -9 <PID>
+
+# Or use different port
+export PORT=5174
+python3 run.py
+```
+
+### Memory Issues
+```bash
+# Monitor memory
+python3 monitor_system.py
+
+# Reduce batch sizes in .env
+export EMBEDDING_BATCH_SIZE=8
+export LLM_NUM_BATCH=64
+```
+
+## 📊 Architecture
+
+```
+┌─────────────────┐     ┌──────────────────┐     ┌─────────────┐
+│   Web Browser   │────▶│   Flask Server   │────▶│   Ollama    │
+│   (index.html)  │     │   (routes.py)    │     │   (LLM)     │
+└─────────────────┘     └──────────────────┘     └─────────────┘
+        │                        │                      │
+        │                        ▼                      │
+        │               ┌──────────────────┐           │
+        │               │   RAG Service    │           │
+        │               │   (rag.py)       │           │
+        │               └──────────────────┘           │
+        │                        │                      │
+        │                        ▼                      │
+        │               ┌──────────────────┐           │
+        │               │  Vector Store    │           │
+        │               │  (FAISS)         │           │
+        │               └──────────────────┘           │
+        │                                              │
+        └──────────── Direct Streaming ────────────────┘
+```
+
+**Flow:**
+1. User sends message via web interface
+2. Flask `/api/prepare` retrieves relevant documents from FAISS
+3. Prompt is built with context and returned to browser
+4. Browser streams response directly from Ollama at `localhost:11434`
+5. Text is formatted live as characters stream in
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+MIT License - see LICENSE file for details.
 
 ## 🆘 Support
 
-For support and questions:
+For issues or questions:
 1. Check the troubleshooting section above
-2. Review the performance monitoring output
-3. Check system resources with `python3 monitor_system.py`
-4. Open an issue in the repository
-
-## 📚 Additional Resources
-
-- [Deployment Guide](docs/DEPLOYMENT.md) - Docker and production deployment
-- [Optimization Guide](docs/OPTIMIZATION.md) - Performance tuning for constrained environments
-- [Ollama Documentation](https://ollama.com/docs)
-- [Flask-SocketIO Documentation](https://flask-socketio.readthedocs.io/)
-- [FAISS Documentation](https://faiss.ai/)
+2. Review logs in terminal output
+3. Open an issue in the repository
 
 ---
 
-**Note**: This project is specifically optimized for 2-core, 8GB RAM virtual machines. For different hardware configurations, you may need to adjust the settings in `.env` and the optimization parameters.
+**Built with ❤️ for Gentari HR**
