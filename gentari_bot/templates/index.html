@@ -101,6 +101,74 @@
       font-weight: 400;
     }
 
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .doc-selector-wrapper {
+      position: relative;
+    }
+
+    .doc-selector {
+      background: rgba(255, 255, 255, 0.15);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      border-radius: 8px;
+      color: var(--white);
+      padding: 8px 32px 8px 12px;
+      font-size: 0.8125rem;
+      font-family: inherit;
+      cursor: pointer;
+      appearance: none;
+      -webkit-appearance: none;
+      min-width: 160px;
+      max-width: 200px;
+      transition: background 0.2s, border-color 0.2s;
+    }
+
+    .doc-selector:hover {
+      background: rgba(255, 255, 255, 0.2);
+      border-color: rgba(255, 255, 255, 0.4);
+    }
+
+    .doc-selector:focus {
+      outline: none;
+      background: rgba(255, 255, 255, 0.25);
+      border-color: rgba(255, 255, 255, 0.5);
+    }
+
+    .doc-selector option {
+      background: var(--gray-800);
+      color: var(--white);
+    }
+
+    .doc-selector-arrow {
+      position: absolute;
+      right: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 12px;
+      height: 12px;
+      pointer-events: none;
+      fill: var(--white);
+      opacity: 0.8;
+    }
+
+    .admin-link {
+      color: rgba(255, 255, 255, 0.8);
+      font-size: 0.75rem;
+      text-decoration: none;
+      padding: 6px 10px;
+      border-radius: 6px;
+      transition: background 0.2s, color 0.2s;
+    }
+
+    .admin-link:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--white);
+    }
+
     #status {
       display: flex;
       align-items: center;
@@ -558,6 +626,17 @@
         <div class="header-title">Gia</div>
         <div class="header-subtitle">Gentari HR Assistant</div>
       </div>
+      <div class="header-right">
+        <div class="doc-selector-wrapper">
+          <select id="doc-selector" class="doc-selector" title="Select a document to chat with">
+            <option value="" disabled selected>Select a document...</option>
+          </select>
+          <svg class="doc-selector-arrow" viewBox="0 0 12 12">
+            <path d="M2 4L6 8L10 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <a href="/admin" class="admin-link">Admin</a>
+      </div>
     </div>
     <div id="status">
       <span class="status-dot"></span>
@@ -565,13 +644,13 @@
     </div>
     <div id="chat-window">
       <div class="welcome-message">
-        <div class="welcome-icon">👋</div>
+        <div class="welcome-icon">�</div>
         <div class="welcome-title">Welcome to Gia</div>
-        <div class="welcome-text">I'm your HR assistant. Ask me anything about company policies, benefits, or procedures.</div>
+        <div class="welcome-text">Select a document from the dropdown above to start chatting about HR policies, benefits, or procedures.</div>
       </div>
     </div>
     <form id="chat-form">
-      <input type="text" id="message-input" placeholder="Type your question..." autocomplete="off" disabled />
+      <input type="text" id="message-input" placeholder="Please select a document first..." autocomplete="off" disabled />
       <button type="submit" id="send-button" disabled>
         <span>Send</span>
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
@@ -592,6 +671,7 @@
       const statusDiv = document.getElementById("status");
       const statusDot = statusDiv.querySelector(".status-dot");
       const statusText = statusDiv.querySelector(".status-text");
+      const docSelector = document.getElementById("doc-selector");
       
       let currentBotMessageElement = null;
       let currentBotMessageContainer = null;
@@ -603,6 +683,11 @@
       let rawTextBuffer = '';  // Full accumulated text
       let displayedLength = 0;  // How much we've shown so far
       let isTyping = false;
+      
+      // Conversation history with document context
+      // Each entry: { role: 'user'|'assistant', content: string, document_id: string|null }
+      let conversationHistory = [];
+      let activeDocumentId = null;  // Track the document for the current conversation
 
       // Create blinking cursor
       function createCursor() {
@@ -721,10 +806,9 @@
           if (flaskRes.ok && ollamaRes.ok) {
             statusDot.classList.add("connected");
             statusDot.classList.remove("disconnected");
-            statusText.textContent = "Ready (Direct LLM)";
-            messageInput.disabled = false;
-            sendButton.disabled = false;
-            setTimeout(() => statusDiv.style.display = "none", 1500);
+            statusText.textContent = "Select a document to start chatting";
+            // Don't enable input until document is selected
+            updateInputState();
             return true;
           }
         } catch (e) {
@@ -735,8 +819,93 @@
         statusText.textContent = "Service unavailable";
         return false;
       }
+      
+      // Enable/disable input based on document selection
+      function updateInputState() {
+        const hasDocument = docSelector.value && docSelector.value !== '';
+        messageInput.disabled = !hasDocument;
+        sendButton.disabled = !hasDocument;
+        if (hasDocument) {
+          messageInput.placeholder = "Type your question...";
+          statusDiv.style.display = "none";
+        } else {
+          messageInput.placeholder = "Please select a document first...";
+          statusDiv.style.display = "flex";
+          statusText.textContent = "Select a document to start chatting";
+        }
+      }
 
       checkHealth();
+
+      // Load available documents for dropdown
+      async function loadDocuments() {
+        try {
+          const response = await fetch('/admin/api/documents/public');
+          const data = await response.json();
+          
+          if (response.ok && data.documents && data.documents.length > 0) {
+            // Clear all existing options
+            docSelector.innerHTML = '';
+            
+            // Add ready documents
+            data.documents.forEach((doc, index) => {
+              const option = document.createElement('option');
+              option.value = doc.id;
+              option.textContent = doc.name;
+              docSelector.appendChild(option);
+            });
+            
+            // Auto-select the first document
+            docSelector.selectedIndex = 0;
+            activeDocumentId = data.documents[0].id;
+            
+            // Update welcome message with selected document
+            const welcomeDiv = chatWindow.querySelector('.welcome-message');
+            if (welcomeDiv) {
+              welcomeDiv.innerHTML = `
+                <div class="welcome-icon">📄</div>
+                <div class="welcome-title">Ready to Chat</div>
+                <div class="welcome-text">Chatting with: ${data.documents[0].name}</div>
+              `;
+            }
+            
+            // Enable input
+            updateInputState();
+          } else {
+            // No documents available
+            docSelector.innerHTML = '<option value="" disabled selected>No documents available</option>';
+            messageInput.placeholder = "Please upload a document in Admin first...";
+          }
+        } catch (error) {
+          console.error('Failed to load documents:', error);
+        }
+      }
+      
+      // Load documents on page load
+      loadDocuments();
+      
+      // Handle document switching - clear conversation when document changes
+      docSelector.addEventListener('change', () => {
+        const newDocId = docSelector.value || null;
+        if (newDocId && newDocId !== activeDocumentId) {
+          // Document changed - clear conversation history
+          conversationHistory = [];
+          activeDocumentId = newDocId;
+          
+          // Clear chat window and show welcome message
+          chatWindow.innerHTML = `
+            <div class="welcome-message">
+              <div class="welcome-icon">📄</div>
+              <div class="welcome-title">Ready to Chat</div>
+              <div class="welcome-text">Now chatting with: ${docSelector.options[docSelector.selectedIndex].text}</div>
+            </div>
+          `;
+          welcomeRemoved = false;
+          
+          // Enable input now that document is selected
+          updateInputState();
+        }
+      });
 
       const checkScrollPosition = () => {
         const threshold = 100;
@@ -778,12 +947,39 @@
         rawTextBuffer = '';
         displayedLength = 0;
         
+        // Use the active document (must be selected)
+        const selectedDocId = docSelector.value;
+        
+        // Ensure a document is selected
+        if (!selectedDocId) {
+          alert('Please select a document first');
+          isStreaming = false;
+          sendButton.disabled = false;
+          return;
+        }
+        
+        // If no active document set yet, set it now
+        if (activeDocumentId === null && conversationHistory.length === 0) {
+          activeDocumentId = selectedDocId;
+        }
+        
+        // Add user message to history
+        conversationHistory.push({
+          role: 'user',
+          content: message,
+          document_id: activeDocumentId
+        });
+        
         try {
-          // Step 1: Get RAG context from Flask
+          // Step 1: Get RAG context from Flask with history
           const prepRes = await fetch('/api/prepare', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message })
+            body: JSON.stringify({ 
+              message,
+              document_id: activeDocumentId,
+              history: conversationHistory.slice(0, -1)  // Send history without current message
+            })
           });
           
           if (!prepRes.ok) throw new Error('Failed to prepare context');
@@ -805,19 +1001,31 @@
               await new Promise(r => setTimeout(r, 20));
             }
             
+            // Add bot response to history
+            conversationHistory.push({
+              role: 'assistant',
+              content: rawTextBuffer,
+              document_id: activeDocumentId
+            });
+            
             removeCursor();
             if (currentBotMessageContainer) {
               currentBotMessageContainer.classList.remove('streaming');
             }
           } else {
             // Step 2: Stream from Ollama for actual questions
-            const { prompt, model, options } = prepData;
+            // Build messages array with conversation history for context
+            const { prompt, model, options, history_messages } = prepData;
+            
+            // Use history from backend if provided, otherwise just current prompt
+            const messages = history_messages || [{ role: 'user', content: prompt }];
+            
           const response = await fetch(`${OLLAMA_URL}/api/chat`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               model: model,
-              messages: [{ role: 'user', content: prompt }],
+              messages: messages,
               stream: true,
               options: options
             })
@@ -856,6 +1064,13 @@
             await new Promise(r => setTimeout(r, 20));
           }
           
+          // Add bot response to history
+          conversationHistory.push({
+            role: 'assistant',
+            content: rawTextBuffer,
+            document_id: activeDocumentId
+          });
+          
           // Remove cursor and streaming class
           removeCursor();
           if (currentBotMessageContainer) {
@@ -871,6 +1086,10 @@
           }
           if (currentBotMessageElement) {
             currentBotMessageElement.textContent = "Sorry, an error occurred. Please try again.";
+          }
+          // Remove last user message from history on error
+          if (conversationHistory.length > 0 && conversationHistory[conversationHistory.length - 1].role === 'user') {
+            conversationHistory.pop();
           }
         } finally {
           removeCursor();

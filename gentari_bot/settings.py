@@ -35,23 +35,23 @@ class AppSettings:
         self.embedding_model_name: str = os.getenv("EMBEDDING_MODEL_NAME", "nomic-ai/nomic-embed-text-v1.5")
         self.embedding_batch_size: int = int(os.getenv("EMBEDDING_BATCH_SIZE", 16))
 
-        self.chunk_size: int = int(os.getenv("CHUNK_SIZE", 200))
-        self.chunk_overlap: int = int(os.getenv("CHUNK_OVERLAP", 20))
-        self.top_k_results: int = int(os.getenv("TOP_K_RESULTS", 2))
-        self.max_context_documents: int = int(os.getenv("CONTEXT_DOCUMENTS", 2))
-        self.max_context_chars: int = int(os.getenv("CONTEXT_CHAR_LIMIT", 800))
+        self.chunk_size: int = int(os.getenv("CHUNK_SIZE", 500))
+        self.chunk_overlap: int = int(os.getenv("CHUNK_OVERLAP", 100))
+        self.top_k_results: int = int(os.getenv("TOP_K_RESULTS", 5))
+        self.max_context_documents: int = int(os.getenv("CONTEXT_DOCUMENTS", 5))
+        self.max_context_chars: int = int(os.getenv("CONTEXT_CHAR_LIMIT", 3000))
 
         self.ollama_base_url: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-        self.ollama_model: str = os.getenv("OLLAMA_MODEL", "qwen2.5:0.5b")  # Fastest model
+        self.ollama_model: str = os.getenv("OLLAMA_MODEL", "llama3.2:3b")  # Better accuracy model
         self.ollama_keep_alive: str = os.getenv("OLLAMA_KEEP_ALIVE", "120m")  # Keep loaded 2hrs
         self.llm_timeout: int = int(os.getenv("LLM_TIMEOUT", 60))
-        self.llm_num_predict: int = int(os.getenv("LLM_NUM_PREDICT", 200))  # More room for details
-        self.llm_num_ctx: int = int(os.getenv("LLM_NUM_CTX", 1024))  # More context for policy details
+        self.llm_num_predict: int = int(os.getenv("LLM_NUM_PREDICT", 400))  # More room for complete answers
+        self.llm_num_ctx: int = int(os.getenv("LLM_NUM_CTX", 4096))  # Larger context for full policy details
         self.llm_num_thread: int = int(os.getenv("LLM_NUM_THREAD", 4))  # Match VM cores
-        self.llm_num_batch: int = int(os.getenv("LLM_NUM_BATCH", 128))  # Small batch
-        self.llm_temperature: float = float(os.getenv("LLM_TEMPERATURE", 0.0))  # Deterministic = fastest
-        self.llm_top_p: float = float(os.getenv("LLM_TOP_P", 0.5))
-        self.llm_top_k: int = int(os.getenv("LLM_TOP_K", 5))  # Minimal sampling
+        self.llm_num_batch: int = int(os.getenv("LLM_NUM_BATCH", 256))  # Larger batch
+        self.llm_temperature: float = float(os.getenv("LLM_TEMPERATURE", 0.0))  # Zero temperature = no hallucination
+        self.llm_top_p: float = float(os.getenv("LLM_TOP_P", 0.1))  # Very focused sampling
+        self.llm_top_k: int = int(os.getenv("LLM_TOP_K", 1))  # Most deterministic
 
         self.max_conversation_history: int = int(os.getenv("MAX_CONVERSATION_HISTORY", 0))  # Disabled for speed
         self.prompt_history_turns: int = int(os.getenv("PROMPT_HISTORY_TURNS", 0))  # No history
@@ -59,20 +59,19 @@ class AppSettings:
         self.prompt_template: str = os.getenv(
             "PROMPT_TEMPLATE",
             (
-                "You are Gia, a professional HR assistant at Gentari. "
-                "Guidelines:\n"
-                "- Be professional, polite, and warm in tone\n"
-                "- Never use emojis\n"
-                "- Start responses naturally like a human colleague would (e.g., 'Great question!', 'Of course!', 'Happy to help!')\n"
-                "- End responses warmly (e.g., 'Let me know if you need anything else.', 'Hope this helps!')\n"
-                "- Present information clearly using bullet points for multiple items\n"
-                "- Include actual policy details: amounts, days, timeframes, conditions\n"
-                "- NEVER say 'Source', '[Source 1]', 'document', 'handbook', or 'refer to' - just state the facts directly\n"
-                "- Keep responses focused and concise\n"
-                "- If you don't have the information, politely direct them to HR at hr@gentari.com\n\n"
-                "HR Policy Information:\n{context}\n\n"
-                "Employee question: {question}\n\n"
-                "Your response:"
+                "You are Gia, a friendly and professional HR assistant at Gentari. "
+                "Respond naturally as a helpful colleague would, not like a robot reading from a manual.\n\n"
+                "IMPORTANT GUIDELINES:\n"
+                "1. Use ONLY the information provided below to answer - never make things up\n"
+                "2. Respond in a warm, conversational tone like a real HR colleague\n"
+                "3. NEVER mention 'Section', 'Page', 'document', or 'policy information' in your response\n"
+                "4. Rephrase the information naturally in your own words while keeping facts accurate\n"
+                "5. Include specific numbers, durations, and details from the information\n"
+                "6. If you don't have the information, kindly say: 'I don't have that specific information. Please reach out to HR at hr@gentari.com for assistance.'\n"
+                "7. NEVER provide links or URLs\n\n"
+                "--- Information for reference ---\n{context}\n--- End of information ---\n\n"
+                "Employee's question: {question}\n\n"
+                "Respond helpfully and naturally:"
             ),
         )
 

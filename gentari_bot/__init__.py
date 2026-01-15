@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 from gentari_bot.logging import configure_logging, get_logger
 from gentari_bot.settings import settings
 from gentari_bot.web import bp as web_bp
+from gentari_bot.web.admin import admin_bp
 
 if TYPE_CHECKING:
     from flask import Flask
@@ -32,6 +33,7 @@ def create_app() -> "Flask":
 
     ext_socketio.init_app(app, async_mode="eventlet")
     app.register_blueprint(web_bp)
+    app.register_blueprint(admin_bp)  # Admin routes for document management
 
     # Initialise long-lived services once at startup
     services = build_container(settings)

@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Dashboard - Gia</title>
+  <style>
+    :root {
+      --primary: #2563eb;
+      --primary-dark: #1d4ed8;
+      --primary-light: rgba(37, 99, 235, 0.1);
+      --gray-50: #f9fafb;
+      --gray-100: #f3f4f6;
+      --gray-200: #e5e7eb;
+      --gray-300: #d1d5db;
+      --gray-400: #9ca3af;
+      --gray-500: #6b7280;
+      --gray-600: #4b5563;
+      --gray-800: #1f2937;
+      --gray-900: #111827;
+      --white: #ffffff;
+      --green-500: #22c55e;
+      --green-100: rgba(34, 197, 94, 0.1);
+      --yellow-500: #eab308;
+      --yellow-100: rgba(234, 179, 8, 0.1);
+      --red-500: #ef4444;
+      --red-100: rgba(239, 68, 68, 0.1);
+      --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+      --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: var(--gray-50);
+      min-height: 100vh;
+      color: var(--gray-800);
+    }
+
+    .header {
+      background: var(--white);
+      border-bottom: 1px solid var(--gray-200);
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .header-icon {
+      width: 40px;
+      height: 40px;
+      background: var(--primary);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+    }
+
+    .header-title {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: var(--gray-900);
+    }
+
+    .header-subtitle {
+      font-size: 0.75rem;
+      color: var(--gray-500);
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .header-link {
+      color: var(--gray-600);
+      text-decoration: none;
+      font-size: 0.875rem;
+      padding: 8px 16px;
+      border-radius: 6px;
+      transition: background 0.2s;
+    }
+
+    .header-link:hover {
+      background: var(--gray-100);
+      color: var(--gray-900);
+    }
+
+    .logout-btn {
+      background: var(--gray-100);
+      color: var(--gray-700);
+      padding: 8px 16px;
+      border-radius: 6px;
+      text-decoration: none;
+      font-size: 0.875rem;
+      transition: background 0.2s;
+    }
+
+    .logout-btn:hover {
+      background: var(--gray-200);
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 32px 24px;
+    }
+
+    .upload-section {
+      background: var(--white);
+      border-radius: 12px;
+      box-shadow: var(--shadow);
+      padding: 24px;
+      margin-bottom: 32px;
+    }
+
+    .section-title {
+      font-size: 1.125rem;
+      font-weight: 600;
+      color: var(--gray-900);
+      margin-bottom: 16px;
+    }
+
+    .upload-area {
+      border: 2px dashed var(--gray-300);
+      border-radius: 8px;
+      padding: 40px;
+      text-align: center;
+      transition: border-color 0.2s, background 0.2s;
+      cursor: pointer;
+    }
+
+    .upload-area:hover,
+    .upload-area.dragover {
+      border-color: var(--primary);
+      background: var(--primary-light);
+    }
+
+    .upload-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+    }
+
+    .upload-text {
+      color: var(--gray-600);
+      margin-bottom: 8px;
+    }
+
+    .upload-hint {
+      font-size: 0.75rem;
+      color: var(--gray-400);
+    }
+
+    .file-input {
+      display: none;
+    }
+
+    .upload-form {
+      display: none;
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid var(--gray-200);
+    }
+
+    .upload-form.active {
+      display: block;
+    }
+
+    .form-row {
+      display: flex;
+      gap: 16px;
+      align-items: flex-end;
+    }
+
+    .form-group {
+      flex: 1;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: var(--gray-700);
+      margin-bottom: 6px;
+    }
+
+    .form-group input {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1px solid var(--gray-200);
+      border-radius: 6px;
+      font-size: 0.875rem;
+    }
+
+    .form-group input:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px var(--primary-light);
+    }
+
+    .selected-file {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      background: var(--gray-50);
+      border: 1px solid var(--gray-200);
+      border-radius: 6px;
+      font-size: 0.875rem;
+    }
+
+    .selected-file-icon {
+      font-size: 1.25rem;
+    }
+
+    .selected-file-name {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .selected-file-size {
+      color: var(--gray-500);
+      font-size: 0.75rem;
+    }
+
+    .btn {
+      padding: 10px 20px;
+      border-radius: 6px;
+      font-size: 0.875rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.2s;
+      border: none;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: var(--white);
+    }
+
+    .btn-primary:hover {
+      background: var(--primary-dark);
+    }
+
+    .btn-primary:disabled {
+      background: var(--gray-300);
+      cursor: not-allowed;
+    }
+
+    .btn-secondary {
+      background: var(--gray-100);
+      color: var(--gray-700);
+    }
+
+    .btn-secondary:hover {
+      background: var(--gray-200);
+    }
+
+    .btn-danger {
+      background: var(--red-100);
+      color: var(--red-500);
+    }
+
+    .btn-danger:hover {
+      background: var(--red-500);
+      color: var(--white);
+    }
+
+    .documents-section {
+      background: var(--white);
+      border-radius: 12px;
+      box-shadow: var(--shadow);
+    }
+
+    .documents-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--gray-200);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .documents-count {
+      font-size: 0.875rem;
+      color: var(--gray-500);
+    }
+
+    .documents-list {
+      min-height: 200px;
+    }
+
+    .document-row {
+      display: flex;
+      align-items: center;
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--gray-100);
+      transition: background 0.2s;
+    }
+
+    .document-row:last-child {
+      border-bottom: none;
+    }
+
+    .document-row:hover {
+      background: var(--gray-50);
+    }
+
+    .document-icon {
+      width: 40px;
+      height: 40px;
+      background: var(--primary-light);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      margin-right: 16px;
+    }
+
+    .document-info {
+      flex: 1;
+    }
+
+    .document-name {
+      font-weight: 500;
+      color: var(--gray-900);
+      margin-bottom: 4px;
+    }
+
+    .document-meta {
+      font-size: 0.75rem;
+      color: var(--gray-500);
+      display: flex;
+      gap: 12px;
+    }
+
+    .document-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: 500;
+      margin-right: 16px;
+    }
+
+    .status-ready {
+      background: var(--green-100);
+      color: var(--green-500);
+    }
+
+    .status-processing {
+      background: var(--yellow-100);
+      color: var(--yellow-500);
+    }
+
+    .status-failed {
+      background: var(--red-100);
+      color: var(--red-500);
+    }
+
+    .status-uploading {
+      background: var(--primary-light);
+      color: var(--primary);
+    }
+
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .status-processing .status-dot {
+      animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    .document-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .action-btn {
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      cursor: pointer;
+      border: 1px solid var(--gray-200);
+      background: var(--white);
+      color: var(--gray-600);
+      transition: all 0.2s;
+    }
+
+    .action-btn:hover {
+      background: var(--gray-50);
+      border-color: var(--gray-300);
+    }
+
+    .action-btn.delete:hover {
+      background: var(--red-100);
+      border-color: var(--red-500);
+      color: var(--red-500);
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 24px;
+      color: var(--gray-500);
+    }
+
+    .empty-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+      opacity: 0.5;
+    }
+
+    .empty-text {
+      font-size: 0.875rem;
+    }
+
+    .loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 40px;
+    }
+
+    .spinner {
+      width: 32px;
+      height: 32px;
+      border: 3px solid var(--gray-200);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: var(--gray-900);
+      color: var(--white);
+      padding: 12px 20px;
+      border-radius: 8px;
+      box-shadow: var(--shadow-lg);
+      font-size: 0.875rem;
+      z-index: 1000;
+      transform: translateY(100px);
+      opacity: 0;
+      transition: transform 0.3s, opacity 0.3s;
+    }
+
+    .toast.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
+
+    .toast.success {
+      background: var(--green-500);
+    }
+
+    .toast.error {
+      background: var(--red-500);
+    }
+
+    /* Modal */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.2s, visibility 0.2s;
+    }
+
+    .modal-overlay.show {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .modal {
+      background: var(--white);
+      border-radius: 12px;
+      padding: 24px;
+      max-width: 400px;
+      width: 90%;
+      box-shadow: var(--shadow-lg);
+    }
+
+    .modal-title {
+      font-size: 1.125rem;
+      font-weight: 600;
+      color: var(--gray-900);
+      margin-bottom: 8px;
+    }
+
+    .modal-text {
+      color: var(--gray-600);
+      font-size: 0.875rem;
+      margin-bottom: 24px;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+    }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <div class="header-left">
+      <div class="header-icon">⚙️</div>
+      <div>
+        <div class="header-title">Admin Dashboard</div>
+        <div class="header-subtitle">Document Management</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <a href="/" class="header-link">← Back to Chat</a>
+      <a href="/admin/logout" class="logout-btn">Logout</a>
+    </div>
+  </header>
+
+  <div class="container">
+    <!-- Upload Section -->
+    <div class="upload-section">
+      <h2 class="section-title">Upload Document</h2>
+      <div class="upload-area" id="upload-area">
+        <div class="upload-icon">📄</div>
+        <div class="upload-text">Drag and drop a file here, or click to browse</div>
+        <div class="upload-hint">Supported: PDF, TXT, MD, DOCX (Max 50MB)</div>
+        <input type="file" class="file-input" id="file-input" accept=".pdf,.txt,.md,.docx">
+      </div>
+      <div class="upload-form" id="upload-form">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Selected File</label>
+            <div class="selected-file">
+              <span class="selected-file-icon">📄</span>
+              <span class="selected-file-name" id="selected-file-name">-</span>
+              <span class="selected-file-size" id="selected-file-size">-</span>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="doc-name">Display Name (optional)</label>
+            <input type="text" id="doc-name" placeholder="Enter a friendly name">
+          </div>
+          <button class="btn btn-primary" id="upload-btn">Upload</button>
+          <button class="btn btn-secondary" id="cancel-btn">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Documents List -->
+    <div class="documents-section">
+      <div class="documents-header">
+        <h2 class="section-title">Documents</h2>
+        <span class="documents-count" id="doc-count">Loading...</span>
+      </div>
+      <div class="documents-list" id="documents-list">
+        <div class="loading">
+          <div class="spinner"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delete Confirmation Modal -->
+  <div class="modal-overlay" id="delete-modal">
+    <div class="modal">
+      <h3 class="modal-title">Delete Document</h3>
+      <p class="modal-text">Are you sure you want to delete "<span id="delete-doc-name"></span>"? This will also remove its vector index.</p>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="closeDeleteModal()">Cancel</button>
+        <button class="btn btn-danger" id="confirm-delete-btn">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const uploadArea = document.getElementById('upload-area');
+    const fileInput = document.getElementById('file-input');
+    const uploadForm = document.getElementById('upload-form');
+    const uploadBtn = document.getElementById('upload-btn');
+    const cancelBtn = document.getElementById('cancel-btn');
+    const docsList = document.getElementById('documents-list');
+    const docCount = document.getElementById('doc-count');
+    const toast = document.getElementById('toast');
+    const deleteModal = document.getElementById('delete-modal');
+
+    let selectedFile = null;
+    let deleteDocId = null;
+    let pollInterval = null;
+
+    // File type icons
+    const fileIcons = {
+      pdf: '📕',
+      txt: '📝',
+      md: '📋',
+      docx: '📘'
+    };
+
+    // Format file size
+    function formatSize(bytes) {
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+
+    // Format date
+    function formatDate(isoString) {
+      const date = new Date(isoString);
+      return date.toLocaleDateString('en-US', { 
+        month: 'short', 
+        day: 'numeric', 
+        hour: '2-digit', 
+        minute: '2-digit' 
+      });
+    }
+
+    // Show toast
+    function showToast(message, type = 'info') {
+      toast.textContent = message;
+      toast.className = 'toast ' + type + ' show';
+      setTimeout(() => toast.classList.remove('show'), 3000);
+    }
+
+    // Upload area events
+    uploadArea.addEventListener('click', () => fileInput.click());
+    
+    uploadArea.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      uploadArea.classList.add('dragover');
+    });
+
+    uploadArea.addEventListener('dragleave', () => {
+      uploadArea.classList.remove('dragover');
+    });
+
+    uploadArea.addEventListener('drop', (e) => {
+      e.preventDefault();
+      uploadArea.classList.remove('dragover');
+      if (e.dataTransfer.files.length) {
+        handleFileSelect(e.dataTransfer.files[0]);
+      }
+    });
+
+    fileInput.addEventListener('change', (e) => {
+      if (e.target.files.length) {
+        handleFileSelect(e.target.files[0]);
+      }
+    });
+
+    function handleFileSelect(file) {
+      const ext = file.name.split('.').pop().toLowerCase();
+      const validExts = ['pdf', 'txt', 'md', 'docx'];
+      
+      if (!validExts.includes(ext)) {
+        showToast('Invalid file type. Supported: PDF, TXT, MD, DOCX', 'error');
+        return;
+      }
+
+      if (file.size > 50 * 1024 * 1024) {
+        showToast('File too large. Maximum size is 50MB', 'error');
+        return;
+      }
+
+      selectedFile = file;
+      document.getElementById('selected-file-name').textContent = file.name;
+      document.getElementById('selected-file-size').textContent = formatSize(file.size);
+      uploadForm.classList.add('active');
+    }
+
+    cancelBtn.addEventListener('click', () => {
+      selectedFile = null;
+      fileInput.value = '';
+      uploadForm.classList.remove('active');
+      document.getElementById('doc-name').value = '';
+    });
+
+    uploadBtn.addEventListener('click', async () => {
+      if (!selectedFile) return;
+
+      uploadBtn.disabled = true;
+      uploadBtn.textContent = 'Uploading...';
+
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+      
+      const displayName = document.getElementById('doc-name').value.trim();
+      if (displayName) {
+        formData.append('name', displayName);
+      }
+
+      try {
+        const response = await fetch('/admin/api/documents', {
+          method: 'POST',
+          body: formData
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          showToast('Document uploaded! Ingestion started.', 'success');
+          cancelBtn.click();
+          loadDocuments();
+          startPolling();
+        } else {
+          showToast(data.error || 'Upload failed', 'error');
+        }
+      } catch (error) {
+        showToast('Upload failed: ' + error.message, 'error');
+      } finally {
+        uploadBtn.disabled = false;
+        uploadBtn.textContent = 'Upload';
+      }
+    });
+
+    // Load documents
+    async function loadDocuments() {
+      try {
+        const response = await fetch('/admin/api/documents');
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Failed to load documents');
+        }
+
+        const documents = data.documents;
+        docCount.textContent = `${documents.length} document${documents.length !== 1 ? 's' : ''}`;
+
+        if (documents.length === 0) {
+          docsList.innerHTML = `
+            <div class="empty-state">
+              <div class="empty-icon">📂</div>
+              <div class="empty-text">No documents uploaded yet. Upload your first document above.</div>
+            </div>
+          `;
+          return;
+        }
+
+        docsList.innerHTML = documents.map(doc => {
+          const icon = fileIcons[doc.file_type] || '📄';
+          const statusClass = 'status-' + doc.status;
+          const statusText = doc.status.charAt(0).toUpperCase() + doc.status.slice(1);
+          
+          return `
+            <div class="document-row" data-id="${doc.id}">
+              <div class="document-icon">${icon}</div>
+              <div class="document-info">
+                <div class="document-name">${escapeHtml(doc.name)}</div>
+                <div class="document-meta">
+                  <span>${doc.filename}</span>
+                  <span>${formatSize(doc.file_size)}</span>
+                  <span>${doc.chunk_count > 0 ? doc.chunk_count + ' chunks' : ''}</span>
+                  <span>${formatDate(doc.created_at)}</span>
+                </div>
+              </div>
+              <div class="document-status ${statusClass}">
+                <span class="status-dot"></span>
+                ${statusText}
+              </div>
+              <div class="document-actions">
+                ${doc.status !== 'processing' ? `
+                  <button class="action-btn delete" onclick="confirmDelete('${doc.id}', '${escapeHtml(doc.name)}')">Delete</button>
+                ` : ''}
+              </div>
+            </div>
+          `;
+        }).join('');
+
+        // Check if any documents are still processing
+        const hasProcessing = documents.some(d => d.status === 'processing' || d.status === 'uploading');
+        if (hasProcessing) {
+          startPolling();
+        } else {
+          stopPolling();
+        }
+
+      } catch (error) {
+        docsList.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-icon">⚠️</div>
+            <div class="empty-text">Failed to load documents: ${error.message}</div>
+          </div>
+        `;
+      }
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // Polling for status updates
+    function startPolling() {
+      if (pollInterval) return;
+      pollInterval = setInterval(loadDocuments, 3000);
+    }
+
+    function stopPolling() {
+      if (pollInterval) {
+        clearInterval(pollInterval);
+        pollInterval = null;
+      }
+    }
+
+    // Delete document
+    function confirmDelete(docId, docName) {
+      deleteDocId = docId;
+      document.getElementById('delete-doc-name').textContent = docName;
+      deleteModal.classList.add('show');
+    }
+
+    function closeDeleteModal() {
+      deleteModal.classList.remove('show');
+      deleteDocId = null;
+    }
+
+    document.getElementById('confirm-delete-btn').addEventListener('click', async () => {
+      if (!deleteDocId) return;
+
+      try {
+        const response = await fetch(`/admin/api/documents/${deleteDocId}`, {
+          method: 'DELETE'
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          showToast('Document deleted', 'success');
+          loadDocuments();
+        } else {
+          showToast(data.error || 'Delete failed', 'error');
+        }
+      } catch (error) {
+        showToast('Delete failed: ' + error.message, 'error');
+      } finally {
+        closeDeleteModal();
+      }
+    });
+
+    // Close modal on overlay click
+    deleteModal.addEventListener('click', (e) => {
+      if (e.target === deleteModal) closeDeleteModal();
+    });
+
+    // Initial load
+    loadDocuments();
+  </script>
+</body>
+</html>

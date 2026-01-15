@@ -25,8 +25,9 @@ logger = get_logger(__name__)
 class VectorStoreService:
     """Coordinate embedding generation, persistence, and semantic search."""
 
-    def __init__(self, *, config: AppSettings = settings) -> None:
+    def __init__(self, *, config: AppSettings = settings, doc_id: str = None) -> None:
         self._config = config
+        self._doc_id = doc_id  # None means default/legacy index
         self._lock = Lock()
         self._embedding_model: Optional[SentenceTransformer | OllamaEmbeddings] = None
         self._use_ollama = config.embedding_model_name.startswith("nomic-embed-text")
@@ -36,14 +37,27 @@ class VectorStoreService:
         self._query_cache: OrderedDict[str, np.ndarray] = OrderedDict()
         self._cache_limit = 32
 
-        base_path = Path(self._config.vector_store_dir)
-        self._index_path = base_path / f"{self._config.vector_store_index_name}.faiss"
-        self._docs_path = base_path / f"{self._config.vector_store_index_name}.pkl"
-        self._meta_path = base_path / f"{self._config.vector_store_index_name}.meta.json"
-        self._ensure_store_directory()
+        # Set paths based on doc_id
+        base_path = Path(self._config.vector_store_dir).parent
+        if doc_id:
+            # Per-document index
+            index_dir = base_path / doc_id
+        else:
+            # Default legacy index
+            index_dir = base_path / "faiss_index"
+        
+        index_dir.mkdir(parents=True, exist_ok=True)
+        self._index_path = index_dir / "faiss_index.faiss"
+        self._docs_path = index_dir / "faiss_index.pkl"
+        self._meta_path = index_dir / "faiss_index.meta.json"
 
         logger.info("Preloading embedding model: %s", self._config.embedding_model_name)
         self._get_embedding_model()
+    
+    @classmethod
+    def for_document(cls, doc_id: str, config: AppSettings = settings) -> "VectorStoreService":
+        """Factory method to create a vector store for a specific document."""
+        return cls(config=config, doc_id=doc_id)
 
     def _ensure_store_directory(self) -> None:
         self._index_path.parent.mkdir(parents=True, exist_ok=True)
@@ -260,3 +274,19 @@ class VectorStoreService:
         else:
             logger.warning("No results returned for query '%s'", query)
         return final
+
+    def add_documents(self, documents: List[Dict[str, Any]], *, batch_size: Optional[int] = None) -> None:
+        """
+        Add documents to the vector store (used for per-document ingestion).
+        
+        Args:
+            documents: List of dicts with 'content' key
+            batch_size: Optional batch size for embedding
+        """
+        chunks = [doc.get("content", "").strip() for doc in documents if doc.get("content")]
+        if not chunks:
+            logger.error("No valid documents provided")
+            return
+        
+        self.create_and_save_store(chunks, batch_size=batch_size)
+        logger.info("Added %d documents to vector store (doc_id=%s)", len(chunks), self._doc_id)

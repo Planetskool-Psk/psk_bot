@@ -26,11 +26,17 @@ def parse_pdf(file_path: Union[str, Path]) -> Optional[str]:
         return None
 
 
-def chunk_text(text: str) -> List[str]:
-    """Split text into semantically meaningful chunks."""
+def chunk_text(text: str, chunk_size: int = None, overlap: int = None) -> List[str]:
+    """Split text into semantically meaningful chunks.
+    
+    Args:
+        text: The text to chunk
+        chunk_size: Size of each chunk (defaults to settings.chunk_size)
+        overlap: Overlap between chunks (defaults to settings.chunk_overlap)
+    """
     splitter = RecursiveCharacterTextSplitter(
-        chunk_size=settings.chunk_size,
-        chunk_overlap=settings.chunk_overlap,
+        chunk_size=chunk_size or settings.chunk_size,
+        chunk_overlap=overlap or settings.chunk_overlap,
         length_function=len,
         separators=["\n\n", "\n", ".", " ", ""],
     )

@@ -1,0 +1,17 @@
+{
+  "documents": [
+    {
+      "id": "gentari_employee_handbook_e84d2400",
+      "name": "Gentari Employee Handbook",
+      "filename": "Gentari India Employee Handbook.pdf",
+      "file_type": "pdf",
+      "file_size": 4924611,
+      "status": "ready",
+      "chunk_count": 257,
+      "error_message": null,
+      "created_at": "2026-01-06T09:17:20.577511Z",
+      "updated_at": "2026-01-06T09:17:30.139753Z"
+    }
+  ],
+  "updated_at": "2026-01-06T09:17:30.139845Z"
+}

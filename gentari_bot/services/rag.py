@@ -60,7 +60,7 @@ class PromptBuilder:
 
     def _select_context(self, documents: List[Dict[str, object]]) -> str:
         if not documents:
-            return "No relevant documents found for this query."
+            return "No relevant information found in the document for this query."
 
         selected = []
         seen_content = set()
@@ -71,27 +71,28 @@ class PromptBuilder:
                 continue
             
             # Deduplicate based on content similarity
-            content_key = content[:150].lower().replace(" ", "")
+            content_key = content[:200].lower().replace(" ", "")
             if content_key in seen_content:
                 continue
             seen_content.add(content_key)
             
-            # Clean up the content
+            # Clean up the content but preserve structure
             content = " ".join(content.split())  # Normalize whitespace
             
             score = float(doc.get("relevance", doc.get("similarity", doc.get("score", 0.0))))
             
-            # Only include documents with reasonable relevance
-            if score < 0.3 and idx > 2:
+            # Include all retrieved documents - they were already filtered by vector search
+            # Lower threshold to include more potentially relevant content
+            if score < 0.2 and idx > 3:
                 continue
             
-            # Add content without source labels - LLM will synthesize the info
-            selected.append(content)
+            # Number each chunk for clarity
+            selected.append(f"[Section {idx}]: {content}")
 
         if not selected:
-            return "No sufficiently relevant documents found."
+            return "No relevant information found in the document."
             
-        combined = "\\n\\n".join(selected)
+        combined = "\n\n".join(selected)
         return self._truncate(combined, self._config.max_context_chars)
 
     def build(self, query: str, documents: List[Dict[str, object]], history: List[Dict[str, str]]) -> str:
