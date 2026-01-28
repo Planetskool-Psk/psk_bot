@@ -31,7 +31,7 @@ def create_app() -> "Flask":
     app.config["SECRET_KEY"] = settings.secret_key
     app.config["APP_SETTINGS"] = settings
 
-    ext_socketio.init_app(app, async_mode="eventlet")
+    ext_socketio.init_app(app, async_mode="gevent")
     app.register_blueprint(web_bp)
     app.register_blueprint(admin_bp)  # Admin routes for document management
 

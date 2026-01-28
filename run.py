@@ -3,11 +3,18 @@
 
 import gc
 import os
+import warnings
+
+# Suppress Pydantic V1 compatibility warning for Python 3.14+
+warnings.filterwarnings("ignore", message="Core Pydantic V1 functionality isn't compatible")
+
+from gevent import monkey
+monkey.patch_all()
+
 import threading
 import time
 from typing import NoReturn
 
-import eventlet
 import psutil
 
 # Configure worker-friendly defaults before importing heavy libraries
@@ -17,8 +24,6 @@ os.environ.setdefault("NUMEXPR_NUM_THREADS", "2")
 os.environ.setdefault("OPENBLAS_NUM_THREADS", "2")
 os.environ.setdefault("VECLIB_MAXIMUM_THREADS", "2")
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
-
-eventlet.monkey_patch()
 
 from gentari_bot import create_app, socketio
 from gentari_bot.logging import get_logger
@@ -59,7 +64,7 @@ def main() -> None:
             snapshot.total / 1024**3,
             snapshot.available / 1024**3,
         )
-        eventlet.wsgi.HttpProtocol.default_request_version = "HTTP/1.0"
+        # gevent doesn't need explicit HTTP protocol version setting
     else:
         logger.info("Starting Flask-SocketIO server on port %s (debug=%s)", port, debug)
 

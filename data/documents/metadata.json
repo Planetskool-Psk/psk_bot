@@ -11,7 +11,19 @@
       "error_message": null,
       "created_at": "2026-01-06T09:17:20.577511Z",
       "updated_at": "2026-01-06T09:17:30.139753Z"
+    },
+    {
+      "id": "macbook_vpn_setup_ab24892e",
+      "name": "macbook vpn setup",
+      "filename": "Macbook VPN Setup step by step 1.pdf",
+      "file_type": "pdf",
+      "file_size": 1703058,
+      "status": "ready",
+      "chunk_count": 4,
+      "error_message": null,
+      "created_at": "2026-01-28T10:04:19.957481Z",
+      "updated_at": "2026-01-28T10:04:20.017371Z"
     }
   ],
-  "updated_at": "2026-01-06T09:17:30.139845Z"
+  "updated_at": "2026-01-28T10:04:20.017391Z"
 }
