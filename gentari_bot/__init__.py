@@ -23,6 +23,7 @@ logger = get_logger(__name__)
 def create_app() -> "Flask":
     """Create and configure the Flask application."""
     from flask import Flask  # Local import to avoid hard dependency during non-web tasks
+    from flask_cors import CORS
     from gentari_bot.container import build_container
     from gentari_bot.extensions import socketio as ext_socketio
 
@@ -30,6 +31,9 @@ def create_app() -> "Flask":
     app = Flask(__name__, template_folder=str(template_folder))
     app.config["SECRET_KEY"] = settings.secret_key
     app.config["APP_SETTINGS"] = settings
+
+    # Enable CORS for API endpoints (allows chatbot widget on different origins)
+    CORS(app, resources={r"/api/*": {"origins": "*"}, r"/admin/api/*": {"origins": "*"}})
 
     ext_socketio.init_app(app, async_mode="gevent")
     app.register_blueprint(web_bp)
