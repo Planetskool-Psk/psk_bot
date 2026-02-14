@@ -6,9 +6,9 @@ from typing import Any, Dict
 
 from flask import Blueprint, jsonify, render_template, request, session, redirect, url_for
 
-from gentari_bot.logging import get_logger
-from gentari_bot.services.document_manager import get_document_manager
-from gentari_bot.services.ingestion_worker import get_ingestion_worker
+from psk_bot.logging import get_logger
+from psk_bot.services.document_manager import get_document_manager
+from psk_bot.services.ingestion_worker import get_ingestion_worker
 
 logger = get_logger(__name__)
 

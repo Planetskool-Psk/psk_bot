@@ -6,7 +6,7 @@ from typing import Optional
 import numpy as np
 from ollama import Client
 
-from gentari_bot.logging import get_logger
+from psk_bot.logging import get_logger
 
 logger = get_logger(__name__)
 

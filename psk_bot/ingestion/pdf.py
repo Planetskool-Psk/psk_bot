@@ -6,8 +6,8 @@ from typing import List, Optional, Union
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from pypdf import PdfReader
 
-from gentari_bot.logging import get_logger
-from gentari_bot.settings import settings
+from psk_bot.logging import get_logger
+from psk_bot.settings import settings
 
 logger = get_logger(__name__)
 

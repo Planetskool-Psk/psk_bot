@@ -1,71 +1,114 @@
-# Deployment Guide
+# PSK Bot — Server Deployment Guide
 
-## Docker Deployment
+Optimized for **2-core / 12GB RAM / AMD Milan VM** (Ubuntu/Debian).  
+Domain: **chatbot.planetskool.com**
 
-### Standard Mode
-```bash
-docker build -t gentari-chatbot .
-docker run -d \
-  --name gentari-chatbot \
-  -p 5173:5173 \
-  -v $(pwd)/data:/app/data \
-  -v $(pwd)/vector_store:/app/vector_store \
-  gentari-chatbot
-```
+---
 
-### Optimized Mode (for 2-core, 8GB RAM VMs)
-```bash
-docker run -d \
-  --name gentari-chatbot \
-  -p 5173:5173 \
-  --memory=6g \
-  --cpus=2 \
-  -e OPTIMIZED_MODE=true \
-  -e OMP_NUM_THREADS=2 \
-  -e MKL_NUM_THREADS=2 \
-  -v $(pwd)/data:/app/data \
-  -v $(pwd)/vector_store:/app/vector_store \
-  gentari-chatbot
-```
-
-### Docker Compose
-```yaml
-version: '3.8'
-services:
-  chatbot:
-    build: .
-    ports:
-      - "5173:5173"
-    volumes:
-      - ./data:/app/data
-      - ./vector_store:/app/vector_store
-    environment:
-      - OPTIMIZED_MODE=true
-      - OLLAMA_BASE_URL=http://host.docker.internal:11434
-    deploy:
-      resources:
-        limits:
-          memory: 6G
-          cpus: '2'
-```
-
-## Production Deployment with Gunicorn
+## Quick Deploy (One Command)
 
 ```bash
-gunicorn run:app \
-  -k eventlet \
-  -b 0.0.0.0:5173 \
-  --timeout 120 \
-  --workers 1 \
-  --log-level info
+# 1. Clone the project onto your server
+git clone <your-repo-url> /opt/psk-bot
+cd /opt/psk-bot
+
+# 2. Run the setup script
+sudo bash setup_server.sh --email your@email.com
 ```
 
-## Environment Variables for Production
+The script handles everything: system deps, swap, Ollama (gemma3:1b + embeddings), Python venv, `.env` generation with a secure API key, systemd services, Nginx reverse proxy with SSL (certbot), firewall, and log rotation.
+
+### Setup Options
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--domain DOMAIN` | `chatbot.planetskool.com` | Nginx server name |
+| `--email EMAIL` | *(none)* | Let's Encrypt notification email |
+| `--app-dir PATH` | `/opt/psk-bot` | Install directory |
+| `--port PORT` | `5173` | App listen port |
+| `--git-repo URL` | *(none)* | Clone from this Git URL |
+| `--skip-ssl` | `false` | Skip SSL setup (HTTP only) |
+| `--skip-firewall` | `false` | Skip UFW configuration |
+
+### Example: Deploy with git clone + SSL
 
 ```bash
-export DEBUG=false
-export PORT=5173
-export OPTIMIZED_MODE=true
-export OLLAMA_BASE_URL=http://localhost:11434
-export OLLAMA_MODEL=gemma3:1b
+sudo bash setup_server.sh \
+  --git-repo https://github.com/youruser/psk-bot.git \
+  --email admin@planetskool.com \
+  --domain chatbot.planetskool.com
 ```
+
+### Example: HTTP-only (no domain yet)
+
+```bash
+sudo bash setup_server.sh --skip-ssl --skip-firewall
+```
+
+---
+
+## Architecture
+
+```
+Robot/Client ─▶ Nginx :443 (SSL) ─▶ PSK Bot :5173 ─▶ Ollama :11434 (gemma3:1b)
+                                          │
+                                     FAISS + Web Search
+```
+
+**Memory budget (12GB):** OS ~2GB, Ollama ~3-4GB, PSK Bot+embeddings ~4-5GB, FAISS ~1GB, headroom ~1GB.
+
+---
+
+## Robot API Reference
+
+All endpoints under `/api/v1/`. Auth via `X-API-Key` header (set `PSK_API_KEY` in `.env`).
+
+Full interactive docs at: `https://chatbot.planetskool.com/docs/`
+
+### POST `/api/v1/chat`
+```bash
+curl -X POST https://chatbot.planetskool.com/api/v1/chat \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: your-key" \
+  -d '{"message": "What is the leave policy?", "document_id": "abc123", "session_id": "robot_01"}'
+```
+Response: `{"response": "...", "latency_ms": 2340, "source": "document", "session_id": "robot_01"}`
+
+### POST `/api/v1/chat/stream` — SSE streaming
+Same body. Returns `data: {"token": "...", "type": "token"}` events, ending with `data: {"type": "done", ...}`.
+
+### GET `/api/v1/health`
+### GET `/api/v1/documents`
+
+---
+
+## Service Management
+
+```bash
+sudo systemctl start|stop|restart psk-bot
+journalctl -u psk-bot -f                    # live logs
+sudo systemctl status psk-bot ollama nginx   # check all services
+```
+
+## Nginx Management
+
+```bash
+sudo nginx -t                    # test config
+sudo systemctl reload nginx      # apply changes
+sudo tail -f /var/log/nginx/error.log
+```
+
+## SSL Certificate
+
+```bash
+# If skipped during setup, run manually:
+sudo certbot --nginx -d chatbot.planetskool.com
+
+# Check renewal
+sudo certbot renew --dry-run
+```
+
+## Performance Tuning
+
+If slow: reduce `LLM_NUM_CTX=1024`, `LLM_NUM_PREDICT=256`, or set `WEB_SEARCH_ENABLED=false` in `.env`.  
+If OOM: reduce `CONTEXT_DOCUMENTS=3`, `MAX_CONVERSATION_HISTORY=4`.

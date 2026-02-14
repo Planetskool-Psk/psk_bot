@@ -5,11 +5,11 @@ import traceback
 from pathlib import Path
 from typing import Callable, Optional
 
-from gentari_bot.ingestion.parsers import parse_document
-from gentari_bot.ingestion.pipeline import chunk_text
-from gentari_bot.logging import get_logger
-from gentari_bot.services.document_manager import get_document_manager
-from gentari_bot.settings import settings
+from psk_bot.ingestion.parsers import parse_document
+from psk_bot.ingestion.pipeline import chunk_text
+from psk_bot.logging import get_logger
+from psk_bot.services.document_manager import get_document_manager
+from psk_bot.settings import settings
 
 logger = get_logger(__name__)
 
@@ -86,7 +86,7 @@ class IngestionWorker:
             logger.info("Created %d chunks", len(chunks))
             
             # Step 3: Create vector store for this document
-            from gentari_bot.services.vector_store import VectorStoreService
+            from psk_bot.services.vector_store import VectorStoreService
             
             vector_store = VectorStoreService(config=settings, doc_id=doc_id)
             

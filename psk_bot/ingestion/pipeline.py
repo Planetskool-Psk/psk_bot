@@ -5,9 +5,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
-from gentari_bot.logging import get_logger
-from gentari_bot.services.vector_store import VectorStoreService
-from gentari_bot.settings import AppSettings, settings
+from psk_bot.logging import get_logger
+from psk_bot.services.vector_store import VectorStoreService
+from psk_bot.settings import AppSettings, settings
 
 from .pdf import chunk_text, parse_pdf
 

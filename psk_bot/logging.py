@@ -16,7 +16,7 @@ def configure_logging(level: Optional[str] = None) -> None:
     logging.basicConfig(level=resolved_level, format=_DEFAULT_FORMAT)
 
 
-def get_logger(name: str = "gentari_bot") -> logging.Logger:
+def get_logger(name: str = "psk_bot") -> logging.Logger:
     """Return a namespaced logger, ensuring configuration exists."""
     configure_logging()
     return logging.getLogger(name)

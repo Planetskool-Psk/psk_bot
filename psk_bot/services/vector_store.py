@@ -15,9 +15,9 @@ import faiss
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
-from gentari_bot.logging import get_logger
-from gentari_bot.services.ollama_embeddings import OllamaEmbeddings
-from gentari_bot.settings import AppSettings, settings
+from psk_bot.logging import get_logger
+from psk_bot.services.ollama_embeddings import OllamaEmbeddings
+from psk_bot.settings import AppSettings, settings
 
 logger = get_logger(__name__)
 

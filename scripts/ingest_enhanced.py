@@ -10,10 +10,10 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.append(str(PROJECT_ROOT))
 
-from gentari_bot.ingestion.pipeline import IngestionPipeline
-from gentari_bot.logging import get_logger
-from gentari_bot.services import VectorStoreService
-from gentari_bot.settings import settings
+from psk_bot.ingestion.pipeline import IngestionPipeline
+from psk_bot.logging import get_logger
+from psk_bot.services import VectorStoreService
+from psk_bot.settings import settings
 
 logger = get_logger(__name__)
 

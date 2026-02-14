@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Application entrypoint with optional optimizations for constrained environments."""
+"""Application entrypoint optimized for 2-core/12GB AMD Milan VM deployment."""
 
 import gc
 import os
@@ -17,16 +17,19 @@ from typing import NoReturn
 
 import psutil
 
-# Configure worker-friendly defaults before importing heavy libraries
+# ─── CPU/Memory tuning for 2-core AMD Milan VM ────────────────────────
 os.environ.setdefault("OMP_NUM_THREADS", "2")
 os.environ.setdefault("MKL_NUM_THREADS", "2")
 os.environ.setdefault("NUMEXPR_NUM_THREADS", "2")
 os.environ.setdefault("OPENBLAS_NUM_THREADS", "2")
 os.environ.setdefault("VECLIB_MAXIMUM_THREADS", "2")
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+# FAISS optimizations for small core count
+os.environ.setdefault("FAISS_DISABLE_GPU", "1")
+os.environ.setdefault("FAISS_OPT_LEVEL", "avx2")  # AMD Milan supports AVX2
 
-from gentari_bot import create_app, socketio
-from gentari_bot.logging import get_logger
+from psk_bot import create_app, socketio
+from psk_bot.logging import get_logger
 
 logger = get_logger(__name__)
 app = create_app()
@@ -50,23 +53,26 @@ def monitor_memory() -> NoReturn:
 def main() -> None:
     port = int(os.environ.get("PORT", "5173"))
     debug = os.environ.get("DEBUG", "false").lower() == "true"
-    optimized = os.environ.get("OPTIMIZED_MODE", "false").lower() == "true"
+    optimized = os.environ.get("OPTIMIZED_MODE", "true").lower() == "true"
+
+    # Always start memory monitoring on servers
+    monitor = threading.Thread(target=monitor_memory, daemon=True)
+    monitor.start()
+
+    snapshot = psutil.virtual_memory()
+    cpu_count = psutil.cpu_count(logical=True)
+    logger.info(
+        "PSK Bot starting — %s cores, RAM %.2fGB free %.2fGB, port %s",
+        cpu_count,
+        snapshot.total / 1024**3,
+        snapshot.available / 1024**3,
+        port,
+    )
 
     if optimized:
-        # Start memory monitoring in optimized mode
-        monitor = threading.Thread(target=monitor_memory, daemon=True)
-        monitor.start()
-
-        snapshot = psutil.virtual_memory()
-        logger.info(
-            "Starting optimized server on %s cores (RAM %.2fGB free %.2fGB)",
-            psutil.cpu_count(),
-            snapshot.total / 1024**3,
-            snapshot.available / 1024**3,
-        )
-        # gevent doesn't need explicit HTTP protocol version setting
-    else:
-        logger.info("Starting Flask-SocketIO server on port %s (debug=%s)", port, debug)
+        logger.info("Optimized mode ON — tuned for 2-core/12GB VM")
+        # Pre-warm: force garbage collection before serving
+        gc.collect()
 
     socketio.run(app, host="0.0.0.0", port=port, debug=debug)
 

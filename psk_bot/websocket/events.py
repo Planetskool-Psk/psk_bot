@@ -6,10 +6,10 @@ from typing import Any, Dict, List, Optional
 
 from flask import current_app, request
 
-from gentari_bot.core.conversation import ConversationStore
-from gentari_bot.extensions import socketio
-from gentari_bot.logging import get_logger
-from gentari_bot.settings import settings
+from psk_bot.core.conversation import ConversationStore
+from psk_bot.extensions import socketio
+from psk_bot.logging import get_logger
+from psk_bot.settings import settings
 
 logger = get_logger(__name__)
 
@@ -39,11 +39,11 @@ def _process_message(session_id: str, message: str, lock: Lock, rag_service, sto
         for token in rag_service.get_response_stream(message, history):
             response_buffer.append(token)
             socketio.emit("stream_response", {"token": token}, to=session_id)
-    except Exception:  # noqa: BLE001 - we need to catch stream failures
+    except Exception:  # noqa: BLE001
         logger.exception("Unhandled error during chat message handling")
         socketio.emit(
             "stream_response",
-            {"token": "An error occurred while processing your request."},
+            {"token": "Oops! Something went wrong on my end. Please try again! 😅"},
             to=session_id,
         )
     else:

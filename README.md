@@ -1,4 +1,4 @@
-# Gia - Gentari HR Assistant
+# PSK Bot - PlanetSkool Assistant
 
 A high-performance RAG (Retrieval-Augmented Generation) chatbot built with Flask and Ollama, featuring real-time streaming responses and a professional chat interface.
 
@@ -30,7 +30,7 @@ A high-performance RAG (Retrieval-Augmented Generation) chatbot built with Flask
 ### Step 1: Clone the Repository
 ```bash
 git clone <your-repository-url>
-cd "Gentari Bot"
+cd "PSK Bot"
 ```
 
 ### Step 2: Install Ollama
@@ -201,8 +201,8 @@ export TOP_K_RESULTS=3            # More documents
 ## 📁 Project Structure
 
 ```
-Gentari Bot/
-├── gentari_bot/                 # Main application package
+PSK Bot/
+├── psk_bot/                 # Main application package
 │   ├── __init__.py              # Flask app factory
 │   ├── container.py             # Dependency injection
 │   ├── settings.py              # Configuration management
@@ -228,40 +228,39 @@ Gentari Bot/
 ├── docs/                        # Documentation
 ├── run.py                       # Application entry point
 ├── requirements.txt             # Python dependencies
-├── Dockerfile                   # Docker configuration
+├── setup_server.sh              # One-command server setup script
+├── gunicorn.conf.py             # Production WSGI config
 └── README.md                    # This file
 ```
 
-## 🐳 Docker Deployment
+## 🚀 Server Deployment (Nginx)
 
-### Build and Run
+### Automated Setup
 ```bash
-# Build image
-docker build -t gia-chatbot .
-
-# Run container
-docker run -d \
-  --name gia-chatbot \
-  -p 5173:5173 \
-  -v $(pwd)/data:/app/data \
-  -v $(pwd)/vector_store:/app/vector_store \
-  gia-chatbot
+# On your 2-core/12GB AMD Milan VM:
+git clone <your-repo-url> /opt/psk-bot
+cd /opt/psk-bot
+sudo bash setup_server.sh --email your@email.com
 ```
 
-### With Resource Limits
+This handles everything in one go: Ollama + models, Python venv, systemd, Nginx with SSL for `chatbot.planetskool.com`, firewall, and log rotation. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for all options.
+
+### Robot API
 ```bash
-docker run -d \
-  --name gia-chatbot \
-  -p 5173:5173 \
-  --memory=4g \
-  --cpus=4 \
-  -e OLLAMA_BASE_URL=http://host.docker.internal:11434 \
-  -v $(pwd)/data:/app/data \
-  -v $(pwd)/vector_store:/app/vector_store \
-  gia-chatbot
+# Full response
+curl -X POST http://<server>/api/v1/chat \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: your-key" \
+  -d '{"message": "Hello!", "session_id": "robot_01"}'
+
+# SSE streaming
+curl -X POST http://<server>/api/v1/chat/stream \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: your-key" \
+  -d '{"message": "What is the leave policy?", "document_id": "abc123"}'
 ```
 
-> **Note:** Ollama must be running on the host machine. Use `host.docker.internal` (macOS/Windows) or the host IP (Linux) for `OLLAMA_BASE_URL`.
+See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for full API reference.
 
 ## 🔧 Troubleshooting
 
@@ -369,4 +368,4 @@ For issues or questions:
 
 ---
 
-**Built with ❤️ for Gentari HR**
+**Built with ❤️ for PlanetSkool**

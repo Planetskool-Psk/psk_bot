@@ -1,14 +1,15 @@
-"""Retrieval augmented generation orchestration."""
+"""Retrieval augmented generation orchestration with hybrid web search."""
 
 import time
 from collections import OrderedDict
 from typing import Dict, Generator, Iterable, List, Optional, Tuple
 
-from gentari_bot.logging import get_logger
-from gentari_bot.settings import AppSettings, settings
+from psk_bot.logging import get_logger
+from psk_bot.settings import AppSettings, settings
 
 from .ollama import OllamaService
 from .vector_store import VectorStoreService
+from .web_search import WebSearchService
 
 logger = get_logger(__name__)
 
@@ -37,72 +38,65 @@ class PromptBuilder:
     def _truncate(self, text: str, limit: int) -> str:
         if len(text) <= limit:
             return text
-        # Try to truncate at a sentence boundary
         truncated = text[:limit]
         last_period = truncated.rfind('.')
-        if last_period > limit * 0.7:  # If we can keep at least 70% of content
+        if last_period > limit * 0.7:
             return truncated[:last_period + 1] + "\n[Content truncated for brevity]"
         return truncated + "..."
 
     def _format_history(self, history: List[Dict[str, str]]) -> str:
         if not history:
-            return "No previous conversation in this session."
+            return ""
         turns = history[-self._config.prompt_history_turns:]
         formatted = []
         for turn in turns:
             user_msg = turn.get('user', '').strip()
             bot_msg = turn.get('bot', '').strip()
-            # Truncate long previous responses to save context
             if len(bot_msg) > 200:
                 bot_msg = bot_msg[:200] + "..."
             formatted.append(f"User: {user_msg}\nAssistant: {bot_msg}")
         return "\n---\n".join(formatted)
 
-    def _select_context(self, documents: List[Dict[str, object]]) -> str:
-        if not documents:
-            return "No relevant information found in the document for this query."
+    def _select_context(self, documents: List[Dict[str, object]], web_context: str = "") -> str:
+        parts = []
 
-        selected = []
-        seen_content = set()
-        
-        for idx, doc in enumerate(documents[:self._config.max_context_documents], start=1):
-            content = str(doc.get("content", "")).strip()
-            if not content:
-                continue
-            
-            # Deduplicate based on content similarity
-            content_key = content[:200].lower().replace(" ", "")
-            if content_key in seen_content:
-                continue
-            seen_content.add(content_key)
-            
-            # Clean up the content but preserve structure
-            content = " ".join(content.split())  # Normalize whitespace
-            
-            score = float(doc.get("relevance", doc.get("similarity", doc.get("score", 0.0))))
-            
-            # Include all retrieved documents - they were already filtered by vector search
-            # Lower threshold to include more potentially relevant content
-            if score < 0.2 and idx > 3:
-                continue
-            
-            # Number each chunk for clarity
-            selected.append(f"[Section {idx}]: {content}")
+        if documents:
+            seen_content = set()
+            doc_parts = []
+            for idx, doc in enumerate(documents[:self._config.max_context_documents], start=1):
+                content = str(doc.get("content", "")).strip()
+                if not content:
+                    continue
+                content_key = content[:200].lower().replace(" ", "")
+                if content_key in seen_content:
+                    continue
+                seen_content.add(content_key)
+                content = " ".join(content.split())
+                score = float(doc.get("relevance", doc.get("similarity", doc.get("score", 0.0))))
+                if score < 0.2 and idx > 3:
+                    continue
+                doc_parts.append(f"[Document Section {idx}]: {content}")
+            if doc_parts:
+                parts.append("📄 FROM YOUR DOCUMENTS:\n" + "\n\n".join(doc_parts))
 
-        if not selected:
-            return "No relevant information found in the document."
-            
-        combined = "\n\n".join(selected)
+        if web_context:
+            parts.append("🌐 FROM THE WEB:\n" + web_context)
+
+        if not parts:
+            return "No relevant information found from documents or web search."
+
+        combined = "\n\n---\n\n".join(parts)
         return self._truncate(combined, self._config.max_context_chars)
 
-    def build(self, query: str, documents: List[Dict[str, object]], history: List[Dict[str, str]]) -> str:
-        context = self._select_context(documents)
+    def build(self, query: str, documents: List[Dict[str, object]], history: List[Dict[str, str]], web_context: str = "") -> str:
+        context = self._select_context(documents, web_context)
         formatted_history = self._format_history(history)
-        return self._config.prompt_template.format(context=context, history=formatted_history, question=query)
+        prompt = self._config.prompt_template.format(context=context, history=formatted_history, question=query)
+        return prompt
 
 
 class RAGService:
-    """High level coordinator for retrieval augmented responses."""
+    """High level coordinator for retrieval augmented responses with hybrid web search."""
 
     def __init__(
         self,
@@ -110,12 +104,14 @@ class RAGService:
         config: AppSettings = settings,
         vector_store: Optional[VectorStoreService] = None,
         llm: Optional[OllamaService] = None,
+        web_search: Optional[WebSearchService] = None,
         prompt_builder: Optional[PromptBuilder] = None,
         cache_size: int = 16,
     ) -> None:
         self._config = config
         self._vector_store = vector_store or VectorStoreService(config=config)
         self._llm = llm or OllamaService(config=config)
+        self._web_search = web_search or WebSearchService(config=config)
         self._prompt_builder = prompt_builder or PromptBuilder(config)
         self._ready = self._vector_store.ensure_ready()
         self._response_cache: OrderedDict[Tuple[str, Tuple[Tuple[str, str], ...]], str] = OrderedDict()
@@ -125,7 +121,12 @@ class RAGService:
 
     @property
     def ready(self) -> bool:
-        return self._ready
+        # Always ready now — we can fall back to web search
+        return True
+
+    @property
+    def web_search(self) -> WebSearchService:
+        return self._web_search
 
     def _preprocess_query(self, query: str) -> str:
         tokens = [word for word in query.lower().split() if word not in _STOP_WORDS and len(word) > 2]
@@ -166,13 +167,7 @@ class RAGService:
             yield cached_response[start : start + chunk_size]
 
     def get_response_stream(self, query: str, history: Iterable[Dict[str, str]]) -> Generator[str, None, None]:
-        """Yield streamed response tokens for the provided query and history."""
-        if not self._ready:
-            self._ready = self._vector_store.ensure_ready()
-        if not self._ready:
-            yield "Error: The document knowledge base is not loaded. Please run the ingestion script."
-            return
-
+        """Yield streamed response tokens — uses documents first, falls back to web search."""
         try:
             history_list = list(history)
             cleaned_query = query.strip()
@@ -184,23 +179,38 @@ class RAGService:
                 return
 
             start_time = time.perf_counter()
-            documents = self._retrieve_documents(cleaned_query)
-            if not documents:
-                logger.warning("No relevant documents found for query '%s'", cleaned_query)
+
+            # Step 1: Try document retrieval
+            documents = []
+            if self._vector_store.ensure_ready():
+                documents = self._retrieve_documents(cleaned_query)
+
+            # Step 2: If documents are weak or missing, try web search
+            web_context = ""
+            best_doc_score = 0.0
+            if documents:
+                best_doc_score = float(documents[0].get("relevance", documents[0].get("similarity", 0.0)))
+
+            if (not documents or best_doc_score < 0.4) and self._web_search.enabled:
+                logger.info("Documents insufficient (score=%.3f), searching the web...", best_doc_score)
+                web_context = self._web_search.search_and_summarize(cleaned_query)
+
+            if not documents and not web_context:
                 fallback = (
-                    "I appreciate your question, but I couldn't find relevant information in my knowledge base "
-                    "to provide an accurate answer. For assistance with this topic, please reach out to the "
-                    "HR team at hr@gentari.com or contact your HR business partner directly."
+                    "Hmm, I couldn't find anything specific about that from my documents or the web. 🤔 "
+                    "Could you try rephrasing your question? Or if you'd like, I can help with something else!"
                 )
                 self._cache_store(cache_key, fallback)
                 yield fallback
                 return
 
-            prompt = self._prompt_builder.build(cleaned_query, documents, history_list)
+            prompt = self._prompt_builder.build(cleaned_query, documents, history_list, web_context)
             retrieval_time = time.perf_counter() - start_time
             logger.info(
-                "Prompt prepared in %.2fs after retrieval (context chars=%s)",
+                "Prompt prepared in %.2fs (docs=%d, web=%s, context chars=%d)",
                 retrieval_time,
+                len(documents),
+                bool(web_context),
                 len(prompt),
             )
 
@@ -213,7 +223,7 @@ class RAGService:
             total_time = time.perf_counter() - start_time
             llm_time = time.perf_counter() - llm_start
             logger.info(
-                "RAG response generated in %.2fs (retrieval %.2fs, generation %.2fs)",
+                "Response generated in %.2fs (retrieval %.2fs, generation %.2fs)",
                 total_time,
                 retrieval_time,
                 llm_time,
@@ -221,13 +231,9 @@ class RAGService:
 
             full_response = "".join(response_chunks)
             self._cache_store(cache_key, full_response)
-            best_score = float(documents[0].get("score", documents[0].get("relevance", 0.0)))
-            if "contact the hr team" in full_response.lower() and best_score > 0.7:
-                logger.warning("Potentially low quality response; best score %.3f", best_score)
-        except Exception:  # noqa: BLE001 - capture unexpected runtime errors
+        except Exception:  # noqa: BLE001
             logger.exception("Unexpected error during RAG pipeline")
             yield (
-                "I apologize for the inconvenience. I encountered a technical issue while processing your request. "
-                "Please try again in a moment, or feel free to rephrase your question. If the issue persists, "
-                "please contact the HR team directly for assistance."
+                "Oops! Something went wrong on my end. 😅 "
+                "Please try again in a moment, or rephrase your question!"
             )

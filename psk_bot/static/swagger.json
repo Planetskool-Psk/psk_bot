@@ -1,0 +1,907 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "PSK Bot API",
+    "description": "API documentation for PSK Bot — a friendly AI assistant powered by Ollama (gemma3:1b).\n\nPSK Bot supports **document-based RAG** (Retrieval-Augmented Generation) and **web search** to answer questions.\n\n## Authentication\nRobot API endpoints (`/api/v1/*`) support optional API key authentication.\n- Set `PSK_API_KEY` in the server `.env` file to enable it.\n- Pass the key via `X-API-Key` header or `api_key` query parameter.\n- If no key is configured on the server, all endpoints are open.\n\n## Rate Limiting\nRobot endpoints are rate-limited to **30 requests/minute** per client (configurable via `API_RATE_LIMIT`).\nClients are identified by `X-Client-ID` header or IP address.\n\n## Streaming (SSE)\nEndpoints returning `text/event-stream` use **Server-Sent Events**.\nEach event is a JSON object prefixed with `data: ` and terminated by `\\n\\n`.",
+    "version": "1.0.0",
+    "contact": {
+      "name": "PlanetSkool",
+      "url": "https://planetskool.com"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:5173",
+      "description": "Local development"
+    },
+    {
+      "url": "http://{server_ip}",
+      "description": "Production server",
+      "variables": {
+        "server_ip": {
+          "default": "your-server-ip",
+          "description": "Your VM's IP or domain"
+        }
+      }
+    }
+  ],
+  "tags": [
+    {
+      "name": "Robot API",
+      "description": "Low-latency endpoints designed for robot hardware integration. Use these for programmatic access."
+    },
+    {
+      "name": "Web UI API",
+      "description": "Endpoints used by the PSK Bot web chat interface."
+    },
+    {
+      "name": "Health",
+      "description": "Service health checks and monitoring."
+    }
+  ],
+  "paths": {
+    "/api/v1/chat": {
+      "post": {
+        "tags": ["Robot API"],
+        "summary": "Chat (full response)",
+        "description": "Send a message and receive a **complete response** in a single JSON reply.\n\nThis is the primary endpoint for robot hardware — optimized for low latency.\n\n**How it works:**\n1. If `document_id` is provided, searches that document first (RAG)\n2. If document results are weak, falls back to web search\n3. If no `document_id`, uses web search + general knowledge\n4. Simple greetings (\"hi\", \"hello\") get instant responses without LLM",
+        "operationId": "robotChat",
+        "security": [{"ApiKeyHeader": []}, {}],
+        "parameters": [
+          {
+            "name": "X-Client-ID",
+            "in": "header",
+            "description": "Client identifier for rate limiting (defaults to IP address)",
+            "schema": {"type": "string", "example": "robot_01"}
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/ChatRequest"},
+              "examples": {
+                "simple_question": {
+                  "summary": "Simple question (no document)",
+                  "value": {
+                    "message": "What is the capital of France?",
+                    "session_id": "robot_01"
+                  }
+                },
+                "document_question": {
+                  "summary": "Question about a specific document",
+                  "value": {
+                    "message": "What is the leave policy?",
+                    "document_id": "gentari_employee_handbook_e84d2400",
+                    "session_id": "robot_01"
+                  }
+                },
+                "with_history": {
+                  "summary": "Follow-up question with history",
+                  "value": {
+                    "message": "Can you explain more about that?",
+                    "document_id": "gentari_employee_handbook_e84d2400",
+                    "session_id": "robot_01",
+                    "history": [
+                      {"role": "user", "content": "What is the leave policy?"},
+                      {"role": "assistant", "content": "The leave policy includes annual leave, sick leave..."}
+                    ]
+                  }
+                },
+                "greeting": {
+                  "summary": "Greeting (instant response, no LLM)",
+                  "value": {
+                    "message": "Hello!",
+                    "session_id": "robot_01"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/ChatResponse"},
+                "examples": {
+                  "document_answer": {
+                    "summary": "Answer from document",
+                    "value": {
+                      "response": "The annual leave policy allows employees to take up to 20 days of paid leave per year. 📋 You can apply through the HR portal.",
+                      "latency_ms": 2340,
+                      "source": "document",
+                      "session_id": "robot_01"
+                    }
+                  },
+                  "web_answer": {
+                    "summary": "Answer from web search",
+                    "value": {
+                      "response": "The capital of France is Paris! 🇫🇷 It's known as the City of Light.",
+                      "latency_ms": 3120,
+                      "source": "web",
+                      "session_id": "robot_01"
+                    }
+                  },
+                  "greeting_answer": {
+                    "summary": "Greeting (instant)",
+                    "value": {
+                      "response": "Hey there! 👋 I'm PSK Bot, your friendly AI assistant. What can I help you with today?",
+                      "latency_ms": 1,
+                      "source": "greeting",
+                      "session_id": "robot_01"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request — missing message or document not ready",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/ErrorResponse"},
+                "example": {"error": "Message is required."}
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — invalid or missing API key",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/ErrorResponse"},
+                "example": {"error": "Invalid or missing API key."}
+              }
+            }
+          },
+          "404": {
+            "description": "Document not found",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/ErrorResponse"},
+                "example": {"error": "Document not found."}
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/ErrorResponse"},
+                "example": {"error": "Rate limit exceeded. Please wait."}
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/ErrorResponse"},
+                "example": {"error": "Service unavailable."}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/chat/stream": {
+      "post": {
+        "tags": ["Robot API"],
+        "summary": "Chat (SSE streaming)",
+        "description": "Send a message and receive the response as a **stream of tokens** via Server-Sent Events (SSE).\n\nUse this when the robot needs to display/speak text **as it generates** for a more natural experience.\n\n**SSE Event Format:**\n```\ndata: {\"token\": \"Hello\", \"type\": \"token\"}\ndata: {\"token\": \" there\", \"type\": \"token\"}\ndata: {\"type\": \"done\", \"latency_ms\": 2340, \"source\": \"document\", \"session_id\": \"robot_01\"}\n```\n\n**Event types:**\n- `token` — A chunk of the response text\n- `done` — Stream complete, includes metadata\n- `error` — An error occurred during generation",
+        "operationId": "robotChatStream",
+        "security": [{"ApiKeyHeader": []}, {}],
+        "parameters": [
+          {
+            "name": "X-Client-ID",
+            "in": "header",
+            "description": "Client identifier for rate limiting",
+            "schema": {"type": "string", "example": "robot_01"}
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/ChatRequest"},
+              "examples": {
+                "stream_question": {
+                  "summary": "Stream a document question",
+                  "value": {
+                    "message": "Summarize the project kickoff document",
+                    "document_id": "project_kick_off_71969311",
+                    "session_id": "robot_01"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "SSE stream of tokens",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string",
+                  "description": "Each line is `data: <JSON>\\n\\n`. JSON contains `token` (string) and `type` (\"token\"|\"done\"|\"error\")."
+                },
+                "example": "data: {\"token\": \"The \", \"type\": \"token\"}\n\ndata: {\"token\": \"leave \", \"type\": \"token\"}\n\ndata: {\"token\": \"policy...\", \"type\": \"token\"}\n\ndata: {\"type\": \"done\", \"latency_ms\": 2340, \"source\": \"document\", \"session_id\": \"robot_01\"}\n\n"
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/ErrorResponse"}
+              }
+            }
+          },
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "429": {"$ref": "#/components/responses/RateLimited"},
+          "503": {"$ref": "#/components/responses/ServiceUnavailable"}
+        }
+      }
+    },
+    "/api/v1/health": {
+      "get": {
+        "tags": ["Health"],
+        "summary": "Health check (robot)",
+        "description": "Lightweight health check endpoint for monitoring from robot hardware or load balancers.\n\nReturns `200` when the service is fully operational, `503` when degraded.",
+        "operationId": "robotHealth",
+        "security": [{"ApiKeyHeader": []}, {}],
+        "responses": {
+          "200": {
+            "description": "Service is healthy",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/HealthResponse"},
+                "example": {
+                  "status": "ok",
+                  "model": "gemma3:1b",
+                  "timestamp": 1739500000.0
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service is degraded",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/HealthResponse"},
+                "example": {
+                  "status": "degraded",
+                  "model": "gemma3:1b",
+                  "timestamp": 1739500000.0
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/documents": {
+      "get": {
+        "tags": ["Robot API"],
+        "summary": "List available documents",
+        "description": "Returns a list of all uploaded documents and their processing status.\n\nUse this to discover valid `document_id` values for the chat endpoints.\n\n**Document statuses:**\n- `ready` — Document is indexed and can be queried\n- `processing` — Document is being ingested\n- `error` — Document failed to process",
+        "operationId": "robotListDocuments",
+        "security": [{"ApiKeyHeader": []}, {}],
+        "responses": {
+          "200": {
+            "description": "List of documents",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/DocumentListResponse"},
+                "example": {
+                  "documents": [
+                    {
+                      "id": "gentari_employee_handbook_e84d2400",
+                      "name": "Gentari Employee Handbook.pdf",
+                      "status": "ready"
+                    },
+                    {
+                      "id": "project_kick_off_71969311",
+                      "name": "Project Kick Off.pdf",
+                      "status": "ready"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {"$ref": "#/components/responses/Unauthorized"}
+        }
+      }
+    },
+    "/api/chat": {
+      "post": {
+        "tags": ["Web UI API"],
+        "summary": "Chat (full response)",
+        "description": "Send a question and get a complete response. Uses the default vector store for RAG.\n\nThis endpoint is used by the web UI. For robot integration, prefer `/api/v1/chat`.",
+        "operationId": "webChat",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["question"],
+                "properties": {
+                  "question": {
+                    "type": "string",
+                    "description": "The user's question",
+                    "example": "What is the leave policy?"
+                  },
+                  "history": {
+                    "type": "array",
+                    "description": "Conversation history",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "user": {"type": "string"},
+                        "bot": {"type": "string"}
+                      }
+                    },
+                    "default": []
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "response": {
+                      "type": "string",
+                      "description": "Complete bot response"
+                    },
+                    "latency_ms": {
+                      "type": "integer",
+                      "description": "Processing time in milliseconds"
+                    }
+                  }
+                },
+                "example": {
+                  "response": "The leave policy allows...",
+                  "latency_ms": 2340
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing question",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/ErrorResponse"},
+                "example": {"error": "Question is required."}
+              }
+            }
+          },
+          "503": {"$ref": "#/components/responses/ServiceUnavailable"}
+        }
+      }
+    },
+    "/api/stream": {
+      "post": {
+        "tags": ["Web UI API"],
+        "summary": "Chat (SSE streaming)",
+        "description": "Send a question and receive tokens via Server-Sent Events.\n\nUsed by the web UI for real-time typing effect.\n\n**SSE format:** Each event is `data: <token_text>\\n\\n`. Final event is `data: [DONE]\\n\\n`.",
+        "operationId": "webStream",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["question"],
+                "properties": {
+                  "question": {
+                    "type": "string",
+                    "example": "What is the leave policy?"
+                  },
+                  "history": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "user": {"type": "string"},
+                        "bot": {"type": "string"}
+                      }
+                    },
+                    "default": []
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "SSE stream",
+            "content": {
+              "text/event-stream": {
+                "schema": {"type": "string"},
+                "example": "data: The \n\ndata: leave \n\ndata: policy...\n\ndata: [DONE]\n\n"
+              }
+            }
+          },
+          "400": {
+            "description": "Missing question",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/ErrorResponse"}
+              }
+            }
+          },
+          "503": {"$ref": "#/components/responses/ServiceUnavailable"}
+        }
+      }
+    },
+    "/api/prepare": {
+      "post": {
+        "tags": ["Web UI API"],
+        "summary": "Prepare RAG prompt (document mode)",
+        "description": "Builds a RAG-augmented prompt for a specific document and returns it with Ollama options.\n\nThe web UI calls this to get the prompt, then calls Ollama directly for streaming.\n\n**Flow:** Web UI → `/api/prepare` → gets prompt → calls Ollama `/api/chat` directly",
+        "operationId": "webPrepare",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["question", "document_id"],
+                "properties": {
+                  "question": {
+                    "type": "string",
+                    "example": "What is the leave policy?"
+                  },
+                  "document_id": {
+                    "type": "string",
+                    "description": "ID of the document to query",
+                    "example": "gentari_employee_handbook_e84d2400"
+                  },
+                  "history": {
+                    "type": "array",
+                    "description": "Chat history for context",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "role": {"type": "string", "enum": ["user", "assistant"]},
+                        "content": {"type": "string"}
+                      }
+                    },
+                    "default": []
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Prepared prompt and options",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/PrepareResponse"},
+                "examples": {
+                  "with_context": {
+                    "summary": "Document context found",
+                    "value": {
+                      "prompt": "You are PSK Bot...\n\nContext: ...\n\nQuestion: What is the leave policy?",
+                      "has_context": true,
+                      "has_web_context": false,
+                      "model": "gemma3:1b",
+                      "options": {
+                        "temperature": 0.4,
+                        "top_p": 0.85,
+                        "num_ctx": 2048,
+                        "num_predict": 384
+                      },
+                      "history_messages": [
+                        {"role": "system", "content": "You are PSK Bot..."},
+                        {"role": "user", "content": "What is the leave policy?"}
+                      ],
+                      "document_id": "gentari_employee_handbook_e84d2400"
+                    }
+                  },
+                  "greeting": {
+                    "summary": "Greeting detected (no LLM needed)",
+                    "value": {
+                      "is_greeting": true,
+                      "response": "Hey there! 👋 I'm PSK Bot. What can I help you with?",
+                      "model": "gemma3:1b"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing question or document_id, or document not ready",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/ErrorResponse"}
+              }
+            }
+          },
+          "404": {
+            "description": "Document not found",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/ErrorResponse"},
+                "example": {"error": "Document not found."}
+              }
+            }
+          },
+          "503": {"$ref": "#/components/responses/ServiceUnavailable"}
+        }
+      }
+    },
+    "/api/prepare_free": {
+      "post": {
+        "tags": ["Web UI API"],
+        "summary": "Prepare prompt (free chat mode)",
+        "description": "Builds a prompt for free-form chat without requiring a document.\n\nUses web search + general knowledge. The web UI calls this for the \"Free Chat\" mode.",
+        "operationId": "webPrepareFree",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["question"],
+                "properties": {
+                  "question": {
+                    "type": "string",
+                    "example": "What is the weather in Tokyo?"
+                  },
+                  "history": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "role": {"type": "string", "enum": ["user", "assistant"]},
+                        "content": {"type": "string"}
+                      }
+                    },
+                    "default": []
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Prepared prompt",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/PrepareResponse"}
+              }
+            }
+          },
+          "400": {
+            "description": "Missing question",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/ErrorResponse"}
+              }
+            }
+          },
+          "503": {"$ref": "#/components/responses/ServiceUnavailable"}
+        }
+      }
+    },
+    "/healthz": {
+      "get": {
+        "tags": ["Health"],
+        "summary": "Detailed health check",
+        "description": "Returns detailed service health including RAG readiness and vector store status.\n\nUsed by Nginx health checks and monitoring dashboards.",
+        "operationId": "healthCheck",
+        "responses": {
+          "200": {
+            "description": "All services healthy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {"type": "string", "enum": ["ok", "degraded"]},
+                    "rag_ready": {"type": "boolean"},
+                    "vector_store_ready": {"type": "boolean"},
+                    "model": {"type": "string", "nullable": true}
+                  }
+                },
+                "example": {
+                  "status": "ok",
+                  "rag_ready": true,
+                  "vector_store_ready": true,
+                  "model": "gemma3:1b"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service degraded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {"type": "string"},
+                    "rag_ready": {"type": "boolean"},
+                    "vector_store_ready": {"type": "boolean"},
+                    "model": {"type": "string", "nullable": true}
+                  }
+                },
+                "example": {
+                  "status": "degraded",
+                  "rag_ready": false,
+                  "vector_store_ready": false,
+                  "model": null
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "ApiKeyHeader": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key",
+        "description": "API key for robot endpoints. Set `PSK_API_KEY` in `.env` to enable. If not set, endpoints are open."
+      },
+      "ApiKeyQuery": {
+        "type": "apiKey",
+        "in": "query",
+        "name": "api_key",
+        "description": "Alternative: pass API key as query parameter"
+      }
+    },
+    "schemas": {
+      "ChatRequest": {
+        "type": "object",
+        "required": ["message"],
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "The user's message or question. Can also use `question` as the key name.",
+            "example": "What is the leave policy?"
+          },
+          "document_id": {
+            "type": "string",
+            "description": "Optional. ID of a specific document to query. If omitted, uses web search + general knowledge.\n\nGet valid IDs from `GET /api/v1/documents`.",
+            "example": "gentari_employee_handbook_e84d2400",
+            "nullable": true
+          },
+          "session_id": {
+            "type": "string",
+            "description": "Optional. Client session identifier for tracking conversations. Defaults to client IP.",
+            "example": "robot_01"
+          },
+          "history": {
+            "type": "array",
+            "description": "Optional. Previous conversation turns for context in follow-up questions.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "role": {
+                  "type": "string",
+                  "enum": ["user", "assistant"],
+                  "description": "Who sent the message"
+                },
+                "content": {
+                  "type": "string",
+                  "description": "The message content"
+                }
+              },
+              "required": ["role", "content"]
+            },
+            "example": [
+              {"role": "user", "content": "What is the leave policy?"},
+              {"role": "assistant", "content": "The leave policy includes annual leave, sick leave..."}
+            ]
+          }
+        }
+      },
+      "ChatResponse": {
+        "type": "object",
+        "properties": {
+          "response": {
+            "type": "string",
+            "description": "The complete bot response text"
+          },
+          "latency_ms": {
+            "type": "integer",
+            "description": "Total processing time in milliseconds (includes retrieval + generation)"
+          },
+          "source": {
+            "type": "string",
+            "enum": ["document", "web", "document+web", "general", "greeting"],
+            "description": "Where the answer came from:\n- `document` — From uploaded document via RAG\n- `web` — From web search results\n- `document+web` — Combined document + web\n- `general` — LLM general knowledge\n- `greeting` — Instant greeting response (no LLM used)"
+          },
+          "session_id": {
+            "type": "string",
+            "description": "Echo of the session_id from the request"
+          }
+        }
+      },
+      "StreamEvent": {
+        "type": "object",
+        "description": "A single SSE event in the stream",
+        "properties": {
+          "token": {
+            "type": "string",
+            "description": "A chunk of response text (present when type=token)"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["token", "done", "error"],
+            "description": "Event type"
+          },
+          "latency_ms": {
+            "type": "integer",
+            "description": "Total time in ms (present when type=done)"
+          },
+          "source": {
+            "type": "string",
+            "description": "Answer source (present when type=done)"
+          },
+          "session_id": {
+            "type": "string",
+            "description": "Session ID (present when type=done)"
+          }
+        }
+      },
+      "HealthResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["ok", "degraded"],
+            "description": "`ok` = fully operational, `degraded` = service issues"
+          },
+          "model": {
+            "type": "string",
+            "nullable": true,
+            "description": "Currently loaded LLM model name"
+          },
+          "timestamp": {
+            "type": "number",
+            "format": "double",
+            "description": "Unix timestamp of the health check"
+          }
+        }
+      },
+      "DocumentListResponse": {
+        "type": "object",
+        "properties": {
+          "documents": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "description": "Document ID — use this in chat requests"
+                },
+                "name": {
+                  "type": "string",
+                  "description": "Original filename"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": ["ready", "processing", "error"],
+                  "description": "Processing status"
+                }
+              }
+            }
+          }
+        }
+      },
+      "PrepareResponse": {
+        "type": "object",
+        "description": "Response from prepare endpoints — contains the assembled prompt and Ollama options for direct LLM calls",
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "description": "The fully assembled RAG prompt with context"
+          },
+          "has_context": {
+            "type": "boolean",
+            "description": "Whether document context was found"
+          },
+          "has_web_context": {
+            "type": "boolean",
+            "description": "Whether web search results were included"
+          },
+          "model": {
+            "type": "string",
+            "description": "Ollama model to use"
+          },
+          "options": {
+            "type": "object",
+            "description": "Ollama generation options (temperature, top_p, etc.)",
+            "additionalProperties": true
+          },
+          "history_messages": {
+            "type": "array",
+            "description": "Complete message array for Ollama — includes system prompt, history, and current question with RAG context",
+            "items": {
+              "type": "object",
+              "properties": {
+                "role": {"type": "string", "enum": ["system", "user", "assistant"]},
+                "content": {"type": "string"}
+              }
+            }
+          },
+          "document_id": {
+            "type": "string",
+            "description": "Echo of the document_id (only in /api/prepare)",
+            "nullable": true
+          },
+          "is_greeting": {
+            "type": "boolean",
+            "description": "If true, `response` contains a direct greeting — no LLM call needed"
+          },
+          "response": {
+            "type": "string",
+            "description": "Direct response (only present for greetings)"
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "Human-readable error message"
+          }
+        },
+        "required": ["error"]
+      }
+    },
+    "responses": {
+      "Unauthorized": {
+        "description": "Invalid or missing API key",
+        "content": {
+          "application/json": {
+            "schema": {"$ref": "#/components/schemas/ErrorResponse"},
+            "example": {"error": "Invalid or missing API key."}
+          }
+        }
+      },
+      "RateLimited": {
+        "description": "Rate limit exceeded (30 req/min per client)",
+        "content": {
+          "application/json": {
+            "schema": {"$ref": "#/components/schemas/ErrorResponse"},
+            "example": {"error": "Rate limit exceeded. Please wait."}
+          }
+        }
+      },
+      "ServiceUnavailable": {
+        "description": "Service unavailable — Ollama or RAG not ready",
+        "content": {
+          "application/json": {
+            "schema": {"$ref": "#/components/schemas/ErrorResponse"},
+            "example": {"error": "Service unavailable."}
+          }
+        }
+      }
+    }
+  }
+}

@@ -14,8 +14,8 @@
 - **Removed `requirements_optimized.txt`**: Consolidated into single `requirements.txt`
 
 ### 3. Removed Backward Compatibility Wrappers ✅
-- **Deleted `config.py`**: Direct use of `gentari_bot.settings.settings`
-- **Deleted `utils/` directory**: Direct use of `gentari_bot.logging.get_logger()`
+- **Deleted `config.py`**: Direct use of `psk_bot.settings.settings`
+- **Deleted `utils/` directory**: Direct use of `psk_bot.logging.get_logger()`
 - **Updated scripts**: Both `scripts/ingest.py` and `scripts/ingest_enhanced.py` now use proper imports
 
 ### 4. Added Documentation Structure ✅
@@ -31,8 +31,8 @@ Created `docs/` folder with:
 ## New Project Structure
 
 ```
-gentari-bot/
-├── gentari_bot/              # Main application package
+psk-bot/
+├── psk_bot/              # Main application package
 │   ├── core/                 # Business logic
 │   ├── ingestion/            # Document processing
 │   ├── services/             # Domain services (LLM, RAG, vector store)
@@ -107,8 +107,8 @@ OPTIMIZED_MODE=true python3 run.py  # Optimized mode
 - `run_optimized.py` → merged into `run.py`
 - `Dockerfile.optimized` → merged into `Dockerfile`
 - `requirements_optimized.txt` → merged into `requirements.txt`
-- `config.py` → use `gentari_bot.settings.settings` directly
-- `utils/` directory → use `gentari_bot.logging` directly
+- `config.py` → use `psk_bot.settings.settings` directly
+- `utils/` directory → use `psk_bot.logging` directly
 - `.env.backup`, `.env.optimized` → keep only `.env`
 - All `__pycache__/` directories
 

@@ -1,18 +1,18 @@
-"""Gentari Bot application factory."""
+"""PSK Bot application factory."""
 
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from gentari_bot.logging import configure_logging, get_logger
-from gentari_bot.settings import settings
-from gentari_bot.web import bp as web_bp
-from gentari_bot.web.admin import admin_bp
+from psk_bot.logging import configure_logging, get_logger
+from psk_bot.settings import settings
+from psk_bot.web import bp as web_bp
+from psk_bot.web.admin import admin_bp
 
 if TYPE_CHECKING:
     from flask import Flask
 
 try:
-    from gentari_bot.extensions import socketio
+    from psk_bot.extensions import socketio
 except Exception:  # pragma: no cover - allows ingestion without web deps installed
     socketio = None  # type: ignore[assignment]
 
@@ -24,11 +24,12 @@ def create_app() -> "Flask":
     """Create and configure the Flask application."""
     from flask import Flask  # Local import to avoid hard dependency during non-web tasks
     from flask_cors import CORS
-    from gentari_bot.container import build_container
-    from gentari_bot.extensions import socketio as ext_socketio
+    from psk_bot.container import build_container
+    from psk_bot.extensions import socketio as ext_socketio
 
     template_folder = Path(__file__).resolve().parent / "templates"
-    app = Flask(__name__, template_folder=str(template_folder))
+    static_folder = Path(__file__).resolve().parent / "static"
+    app = Flask(__name__, template_folder=str(template_folder), static_folder=str(static_folder))
     app.config["SECRET_KEY"] = settings.secret_key
     app.config["APP_SETTINGS"] = settings
 
@@ -38,6 +39,16 @@ def create_app() -> "Flask":
     ext_socketio.init_app(app, async_mode="gevent")
     app.register_blueprint(web_bp)
     app.register_blueprint(admin_bp)  # Admin routes for document management
+
+    # Swagger UI for API documentation
+    from flask_swagger_ui import get_swaggerui_blueprint
+    SWAGGER_URL = "/docs"
+    API_SPEC_URL = "/static/swagger.json"
+    swagger_bp = get_swaggerui_blueprint(
+        SWAGGER_URL, API_SPEC_URL,
+        config={"app_name": "PSK Bot API", "layout": "BaseLayout"}
+    )
+    app.register_blueprint(swagger_bp, url_prefix=SWAGGER_URL)
 
     # Initialise long-lived services once at startup
     services = build_container(settings)
@@ -50,7 +61,7 @@ def create_app() -> "Flask":
         logger.warning("RAG service initialised but not ready")
 
     # Import socket event handlers after socketio initialisation
-    from gentari_bot.websocket import events  # noqa: F401
+    from psk_bot.websocket import events  # noqa: F401
 
     return app
 

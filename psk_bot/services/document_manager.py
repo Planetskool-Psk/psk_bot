@@ -10,7 +10,7 @@ from pathlib import Path
 from threading import Lock
 from typing import List, Optional
 
-from gentari_bot.logging import get_logger
+from psk_bot.logging import get_logger
 
 logger = get_logger(__name__)
 

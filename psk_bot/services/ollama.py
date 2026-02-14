@@ -4,20 +4,20 @@ from typing import Dict, Generator, Optional, Union
 
 import ollama
 
-from gentari_bot.logging import get_logger
-from gentari_bot.settings import AppSettings, settings
+from psk_bot.logging import get_logger
+from psk_bot.settings import AppSettings, settings
 
 logger = get_logger(__name__)
 
-# Baseline generation options; tuned for maximum speed on CPU
+# Generation options tuned for speed on 2-core AMD Milan VM with gemma3:1b
 DEFAULT_GENERATION_OPTIONS: Dict[str, Union[int, float, bool]] = {
-    "num_gpu": 0,  # CPU only
-    "num_batch": 128,  # Small batch for low RAM
-    "repeat_penalty": 1.0,  # No penalty = fastest
-    "repeat_last_n": 0,  # Disabled
-    "mirostat": 0,  # Disabled
-    "num_keep": 0,  # Don't cache
-    "seed": 42,  # Fixed seed = faster, consistent
+    "num_gpu": 0,  # CPU only — no GPU on this VM
+    "num_batch": 128,  # Smaller batch = less RAM, still fast on 2 cores
+    "repeat_penalty": 1.1,
+    "repeat_last_n": 64,
+    "mirostat": 0,
+    "seed": -1,
+    "numa": False,  # Single NUMA node on small VM
 }
 
 
