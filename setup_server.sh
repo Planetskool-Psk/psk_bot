@@ -504,65 +504,33 @@ success "Service '${SERVICE_NAME}' created and enabled"
 # ═══════════════════════════════════════════════════════════════════════════════
 step "Configuring Nginx for ${DOMAIN}"
 
-cat > /etc/nginx/sites-available/${SERVICE_NAME} <<'NGINXEOF'
+# Always start with HTTP-only config. Certbot will add the HTTPS block in step 10.
+cat > /etc/nginx/sites-available/${SERVICE_NAME} <<NGINXEOF
 # ═══════════════════════════════════════════════════════════════════════
 # PSK Bot — Nginx Reverse Proxy
-# Domain: chatbot.planetskool.com
+# Domain: ${DOMAIN}
+# SSL will be added automatically by certbot in step 10
 # ═══════════════════════════════════════════════════════════════════════
 
 # Rate limiting zones
-limit_req_zone $binary_remote_addr zone=api_limit:10m rate=10r/s;
-limit_req_zone $binary_remote_addr zone=general_limit:10m rate=30r/s;
+limit_req_zone \$binary_remote_addr zone=api_limit:10m rate=10r/s;
+limit_req_zone \$binary_remote_addr zone=general_limit:10m rate=30r/s;
 
 upstream psk_backend {
-    server 127.0.0.1:__PORT__;
+    server 127.0.0.1:${PORT};
     keepalive 16;
 }
 
-# ─── Redirect HTTP → HTTPS ───────────────────────────────────────────
 server {
     listen 80;
     listen [::]:80;
-    server_name __DOMAIN__;
-
-    # Let's Encrypt challenge
-    location /.well-known/acme-challenge/ {
-        root /var/www/html;
-        allow all;
-    }
-
-    # Redirect everything else to HTTPS
-    location / {
-        return 301 https://$host$request_uri;
-    }
-}
-
-# ─── Main HTTPS server ───────────────────────────────────────────────
-server {
-    listen 443 ssl http2;
-    listen [::]:443 ssl http2;
-    server_name __DOMAIN__;
-
-    # SSL will be configured by certbot — placeholder until then
-    # ssl_certificate     /etc/letsencrypt/live/__DOMAIN__/fullchain.pem;
-    # ssl_certificate_key /etc/letsencrypt/live/__DOMAIN__/privkey.pem;
-
-    # ─── SSL hardening ───────────────────────────────────────
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384;
-    ssl_prefer_server_ciphers off;
-    ssl_session_timeout 1d;
-    ssl_session_cache shared:SSL:10m;
-    ssl_session_tickets off;
-    ssl_stapling on;
-    ssl_stapling_verify on;
+    server_name ${DOMAIN};
 
     # ─── Security headers ────────────────────────────────────
     add_header X-Frame-Options "SAMEORIGIN" always;
     add_header X-Content-Type-Options "nosniff" always;
     add_header X-XSS-Protection "1; mode=block" always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
-    add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload" always;
 
     # ─── General settings ────────────────────────────────────
     client_max_body_size 50M;
@@ -585,16 +553,22 @@ server {
         application/xml
         image/svg+xml;
 
+    # ─── Let's Encrypt challenge ─────────────────────────────
+    location /.well-known/acme-challenge/ {
+        root /var/www/html;
+        allow all;
+    }
+
     # ─── Robot API endpoints (low latency) ───────────────────
     location /api/v1/ {
         limit_req zone=api_limit burst=20 nodelay;
 
         proxy_pass http://psk_backend;
         proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
         proxy_set_header Connection "";
 
         # SSE streaming support — no buffering
@@ -609,7 +583,7 @@ server {
         add_header Access-Control-Allow-Headers "Content-Type, X-API-Key, X-Client-ID, Authorization" always;
         add_header Access-Control-Max-Age 86400 always;
 
-        if ($request_method = OPTIONS) {
+        if (\$request_method = OPTIONS) {
             return 204;
         }
     }
@@ -618,12 +592,12 @@ server {
     location /socket.io/ {
         proxy_pass http://psk_backend;
         proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
         proxy_buffering off;
         proxy_read_timeout 300s;
     }
@@ -634,10 +608,10 @@ server {
 
         proxy_pass http://psk_backend;
         proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
         proxy_set_header Connection "";
     }
 
@@ -653,20 +627,14 @@ server {
 
     # ─── Admin panel ─────────────────────────────────────────
     location /admin/ {
-        # Restrict admin access to internal networks (adjust as needed)
-        # allow 10.0.0.0/8;
-        # allow 172.16.0.0/12;
-        # allow 192.168.0.0/16;
-        # deny all;
-
         limit_req zone=general_limit burst=5 nodelay;
 
         proxy_pass http://psk_backend;
         proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
         proxy_set_header Connection "";
     }
 
@@ -676,10 +644,10 @@ server {
 
         proxy_pass http://psk_backend;
         proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
         proxy_set_header Connection "";
 
         # SSE support for /api/stream
@@ -695,96 +663,12 @@ server {
 }
 NGINXEOF
 
-# Replace placeholders
-sed -i "s/__DOMAIN__/${DOMAIN}/g" /etc/nginx/sites-available/${SERVICE_NAME}
-sed -i "s/__PORT__/${PORT}/g"     /etc/nginx/sites-available/${SERVICE_NAME}
-
 # Enable the site
 ln -sf /etc/nginx/sites-available/${SERVICE_NAME} /etc/nginx/sites-enabled/
 rm -f /etc/nginx/sites-enabled/default 2>/dev/null || true
 
-# For initial setup without SSL, temporarily enable the HTTP block to serve directly
-# We'll comment out the HTTPS block until certbot runs
-if [[ "$SKIP_SSL" == "true" ]]; then
-    # Replace the HTTP→HTTPS redirect with a direct proxy config
-    cat > /etc/nginx/sites-available/${SERVICE_NAME} <<HTTPEOF
-# PSK Bot — Nginx (HTTP only, no SSL)
-limit_req_zone \$binary_remote_addr zone=api_limit:10m rate=10r/s;
-limit_req_zone \$binary_remote_addr zone=general_limit:10m rate=30r/s;
-
-upstream psk_backend {
-    server 127.0.0.1:${PORT};
-    keepalive 16;
-}
-
-server {
-    listen 80;
-    listen [::]:80;
-    server_name ${DOMAIN};
-
-    client_max_body_size 50M;
-    proxy_connect_timeout 10s;
-    proxy_send_timeout 30s;
-
-    gzip on;
-    gzip_vary on;
-    gzip_proxied any;
-    gzip_comp_level 4;
-    gzip_min_length 256;
-    gzip_types application/json text/event-stream text/plain text/css application/javascript;
-
-    add_header X-Frame-Options "SAMEORIGIN" always;
-    add_header X-Content-Type-Options "nosniff" always;
-    add_header X-XSS-Protection "1; mode=block" always;
-
-    location /api/v1/ {
-        limit_req zone=api_limit burst=20 nodelay;
-        proxy_pass http://psk_backend;
-        proxy_http_version 1.1;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-        proxy_set_header Connection "";
-        proxy_buffering off;
-        proxy_cache off;
-        proxy_read_timeout 120s;
-        chunked_transfer_encoding on;
-        add_header Access-Control-Allow-Origin "*" always;
-        add_header Access-Control-Allow-Methods "GET, POST, OPTIONS" always;
-        add_header Access-Control-Allow-Headers "Content-Type, X-API-Key, X-Client-ID, Authorization" always;
-        if (\$request_method = OPTIONS) { return 204; }
-    }
-
-    location /socket.io/ {
-        proxy_pass http://psk_backend;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_buffering off;
-        proxy_read_timeout 300s;
-    }
-
-    location / {
-        limit_req zone=general_limit burst=10 nodelay;
-        proxy_pass http://psk_backend;
-        proxy_http_version 1.1;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-        proxy_set_header Connection "";
-        proxy_buffering off;
-    }
-
-    location ~ /\. { deny all; access_log off; log_not_found off; }
-}
-HTTPEOF
-    info "SSL skipped — Nginx configured for HTTP only"
-fi
+# Ensure webroot exists for certbot challenges
+mkdir -p /var/www/html
 
 # Test Nginx config
 nginx -t 2>&1 | while read -r line; do info "$line"; done
@@ -809,73 +693,7 @@ else
         warn "Domain ${DOMAIN} does not resolve yet."
         warn "Point your DNS A record to ${SERVER_IP} first, then run:"
         info "  sudo certbot --nginx -d ${DOMAIN}"
-
-        # Fall back to HTTP-only config
-        cat > /etc/nginx/sites-available/${SERVICE_NAME} <<HTTPFALLBACK
-limit_req_zone \$binary_remote_addr zone=api_limit:10m rate=10r/s;
-limit_req_zone \$binary_remote_addr zone=general_limit:10m rate=30r/s;
-
-upstream psk_backend {
-    server 127.0.0.1:${PORT};
-    keepalive 16;
-}
-
-server {
-    listen 80;
-    listen [::]:80;
-    server_name ${DOMAIN} _;
-
-    client_max_body_size 50M;
-    gzip on;
-    gzip_types application/json text/event-stream text/plain;
-
-    location /.well-known/acme-challenge/ { root /var/www/html; allow all; }
-
-    location /api/v1/ {
-        limit_req zone=api_limit burst=20 nodelay;
-        proxy_pass http://psk_backend;
-        proxy_http_version 1.1;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-        proxy_set_header Connection "";
-        proxy_buffering off;
-        proxy_cache off;
-        proxy_read_timeout 120s;
-        add_header Access-Control-Allow-Origin "*" always;
-        add_header Access-Control-Allow-Methods "GET, POST, OPTIONS" always;
-        add_header Access-Control-Allow-Headers "Content-Type, X-API-Key, X-Client-ID" always;
-        if (\$request_method = OPTIONS) { return 204; }
-    }
-
-    location /socket.io/ {
-        proxy_pass http://psk_backend;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_buffering off;
-        proxy_read_timeout 300s;
-    }
-
-    location / {
-        limit_req zone=general_limit burst=10 nodelay;
-        proxy_pass http://psk_backend;
-        proxy_http_version 1.1;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-        proxy_set_header Connection "";
-        proxy_buffering off;
-    }
-
-    location ~ /\. { deny all; }
-}
-HTTPFALLBACK
-        nginx -t > /dev/null 2>&1 && systemctl reload nginx
+        info "Nginx is serving HTTP for now — SSL will be added by certbot."
     else
         info "Domain resolves to ${DOMAIN_IP}, server IP is ${SERVER_IP}"
 
