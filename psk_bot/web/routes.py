@@ -124,6 +124,74 @@ def api_stream():
     )
 
 
+@bp.post("/api/stream_prepared")
+def api_stream_prepared():
+    """Stream a response from Ollama using pre-built messages from /api/prepare endpoints.
+
+    This is the production-safe alternative to calling Ollama directly from the browser.
+    The frontend calls /api/prepare or /api/prepare_free first to build the prompt with
+    RAG context, then sends the resulting messages here for streaming.
+
+    Request JSON:
+        {
+            "messages": [...],  // from prepare endpoint's history_messages
+            "model": "gemma3:1b",
+            "options": {...}    // from prepare endpoint
+        }
+
+    Response: SSE stream with JSON events:
+        data: {"token": "Hello", "type": "token"}
+        data: {"type": "done"}
+    """
+    payload: Dict[str, Any] = request.get_json(silent=True) or {}
+    messages = payload.get("messages") or payload.get("history_messages")
+    model = payload.get("model")
+    options = payload.get("options") or {}
+
+    if not messages:
+        return jsonify({"error": "messages is required."}), 400
+
+    services = current_app.extensions.get("services")
+    if not services:
+        return jsonify({"error": "Service unavailable."}), 503
+
+    # Use the LLM service's client for the actual Ollama call
+    llm = services.llm
+    if not llm._client:
+        return jsonify({"error": "Ollama is not available."}), 503
+
+    target_model = model or llm._model
+    merged_options = {**llm._options, **options}
+
+    def generate():
+        try:
+            stream = llm._client.chat(
+                model=target_model,
+                messages=messages,
+                stream=True,
+                options=merged_options,
+                keep_alive=llm._keep_alive,
+            )
+            for chunk in stream:
+                content = chunk.get("message", {}).get("content")
+                if content:
+                    yield f"data: {json.dumps({'token': content, 'type': 'token'})}\n\n"
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+        except Exception as e:
+            current_app.logger.exception("Error in stream_prepared")
+            yield f"data: {json.dumps({'type': 'error', 'error': str(e)})}\n\n"
+
+    return Response(
+        stream_with_context(generate()),
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
 import re
 
 # Greeting patterns - simple greetings that don't need RAG

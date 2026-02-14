@@ -351,9 +351,10 @@ export LLM_NUM_BATCH=64
 **Flow:**
 1. User sends message via web interface
 2. Flask `/api/prepare` retrieves relevant documents from FAISS
-3. Prompt is built with context and returned to browser
-4. Browser streams response directly from Ollama at `localhost:11434`
-5. Text is formatted live as characters stream in
+3. Prompt is built with RAG context and returned to browser
+4. Browser sends messages to `/api/stream_prepared` (server-side Ollama proxy)
+5. Backend streams SSE tokens back — no direct Ollama access from browser
+6. Text is formatted live as characters stream in
 
 ## 📄 License
 

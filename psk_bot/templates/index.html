@@ -569,7 +569,6 @@
 
   <script defer>
     document.addEventListener('DOMContentLoaded', () => {
-      const OLLAMA_URL = 'http://localhost:11434';
 
       const chatWindow = document.getElementById("chat-window");
       const messageInput = document.getElementById("message-input");
@@ -717,11 +716,9 @@
 
       async function checkHealth() {
         try {
-          const [flaskRes, ollamaRes] = await Promise.all([
-            fetch('/healthz'),
-            fetch(OLLAMA_URL + '/api/tags')
-          ]);
-          if (flaskRes.ok && ollamaRes.ok) {
+          const res = await fetch('/healthz');
+          if (res.ok) {
+            const data = await res.json();
             statusDot.classList.add("connected");
             statusDot.classList.remove("disconnected");
             statusText.textContent = "Connected & ready!";
@@ -736,7 +733,7 @@
         } catch (e) { console.error("Health check failed:", e); }
         statusDot.classList.remove("connected");
         statusDot.classList.add("disconnected");
-        statusText.textContent = "Service unavailable \u2014 make sure Ollama is running";
+        statusText.textContent = "Service unavailable \u2014 please wait or refresh";
         return false;
       }
 
@@ -880,13 +877,13 @@
             const { model, options, history_messages, has_web_context } = prepData;
             const messages = history_messages || [{ role: 'user', content: prepData.prompt }];
 
-            const response = await fetch(OLLAMA_URL + '/api/chat', {
+            const response = await fetch('/api/stream_prepared', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ model: model, messages: messages, stream: true, options: options })
+              body: JSON.stringify({ messages: messages, model: model, options: options })
             });
 
-            if (!response.ok) throw new Error('Ollama error');
+            if (!response.ok) throw new Error('Stream error');
 
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
@@ -897,14 +894,16 @@
               const chunk = decoder.decode(value, { stream: true });
               const lines = chunk.split('\n').filter(l => l.trim());
               for (const line of lines) {
+                if (!line.startsWith('data: ')) continue;
+                const payload = line.slice(6);
                 try {
-                  const json = JSON.parse(line);
-                  if (json.message && json.message.content) {
-                    rawTextBuffer += json.message.content;
+                  const evt = JSON.parse(payload);
+                  if (evt.type === 'token' && evt.token) {
+                    rawTextBuffer += evt.token;
                     typeCharacters();
                   }
-                  if (json.done) break;
-                } catch (e) { /* skip */ }
+                  if (evt.type === 'done' || evt.type === 'error') break;
+                } catch (e) { /* skip non-JSON SSE lines */ }
               }
             }
 
