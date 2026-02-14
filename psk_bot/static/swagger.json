@@ -11,18 +11,12 @@
   },
   "servers": [
     {
-      "url": "http://localhost:5173",
-      "description": "Local development"
+      "url": "https://chatbot.planetskool.com",
+      "description": "Production"
     },
     {
-      "url": "http://{server_ip}",
-      "description": "Production server",
-      "variables": {
-        "server_ip": {
-          "default": "your-server-ip",
-          "description": "Your VM's IP or domain"
-        }
-      }
+      "url": "http://localhost:5173",
+      "description": "Local development"
     }
   ],
   "tags": [
