@@ -157,7 +157,7 @@ apt-get install -y -qq \
     nginx certbot python3-certbot-nginx \
     curl wget git build-essential \
     ufw logrotate \
-    jq htop unzip \
+    jq htop unzip zstd \
     2>&1 | tail -1
 
 success "System packages installed"
