@@ -28,7 +28,7 @@ os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 os.environ.setdefault("FAISS_DISABLE_GPU", "1")
 os.environ.setdefault("FAISS_OPT_LEVEL", "avx2")  # AMD Milan supports AVX2
 
-from psk_bot import create_app, socketio
+from psk_bot import create_app
 from psk_bot.logging import get_logger
 
 logger = get_logger(__name__)
@@ -74,7 +74,7 @@ def main() -> None:
         # Pre-warm: force garbage collection before serving
         gc.collect()
 
-    socketio.run(app, host="0.0.0.0", port=port, debug=debug)
+    app.run(host="0.0.0.0", port=port, debug=debug)
 
 
 if __name__ == "__main__":

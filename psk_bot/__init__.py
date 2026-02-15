@@ -11,11 +11,6 @@ from psk_bot.web.admin import admin_bp
 if TYPE_CHECKING:
     from flask import Flask
 
-try:
-    from psk_bot.extensions import socketio
-except Exception:  # pragma: no cover - allows ingestion without web deps installed
-    socketio = None  # type: ignore[assignment]
-
 configure_logging()
 logger = get_logger(__name__)
 
@@ -25,7 +20,6 @@ def create_app() -> "Flask":
     from flask import Flask  # Local import to avoid hard dependency during non-web tasks
     from flask_cors import CORS
     from psk_bot.container import build_container
-    from psk_bot.extensions import socketio as ext_socketio
 
     template_folder = Path(__file__).resolve().parent / "templates"
     static_folder = Path(__file__).resolve().parent / "static"
@@ -36,7 +30,6 @@ def create_app() -> "Flask":
     # Enable CORS for API endpoints (allows chatbot widget on different origins)
     CORS(app, resources={r"/api/*": {"origins": "*"}, r"/admin/api/*": {"origins": "*"}})
 
-    ext_socketio.init_app(app, async_mode="gevent")
     app.register_blueprint(web_bp)
     app.register_blueprint(admin_bp)  # Admin routes for document management
 
@@ -60,10 +53,7 @@ def create_app() -> "Flask":
     else:
         logger.warning("RAG service initialised but not ready")
 
-    # Import socket event handlers after socketio initialisation
-    from psk_bot.websocket import events  # noqa: F401
-
     return app
 
 
-__all__ = ["create_app", "socketio"]
+__all__ = ["create_app"]

@@ -2,8 +2,8 @@
   "openapi": "3.0.3",
   "info": {
     "title": "PSK Bot API",
-    "description": "API documentation for PSK Bot — a friendly AI assistant powered by Ollama (gemma3:1b).\n\nPSK Bot supports **document-based RAG** (Retrieval-Augmented Generation) and **web search** to answer questions.\n\n## Authentication\nRobot API endpoints (`/api/v1/*`) support optional API key authentication.\n- Set `PSK_API_KEY` in the server `.env` file to enable it.\n- Pass the key via `X-API-Key` header or `api_key` query parameter.\n- If no key is configured on the server, all endpoints are open.\n\n## Rate Limiting\nRobot endpoints are rate-limited to **30 requests/minute** per client (configurable via `API_RATE_LIMIT`).\nClients are identified by `X-Client-ID` header or IP address.\n\n## Streaming (SSE)\nEndpoints returning `text/event-stream` use **Server-Sent Events**.\nEach event is a JSON object prefixed with `data: ` and terminated by `\\n\\n`.",
-    "version": "1.0.0",
+    "description": "API documentation for PSK Bot — a fast AI assistant powered by Ollama (gemma3:1b).\n\nPSK Bot supports **document-based RAG** (Retrieval-Augmented Generation) and **direct LLM conversation** for general knowledge queries.\n\nAll responses stream directly from the Ollama serving endpoint via SSE for minimal latency.\n\n## Document Ingestion\nDocuments are parsed with **OCR support** — scanned PDFs, embedded images, charts, and diagrams are all extracted and indexed. Supported file types: `.pdf`, `.docx`, `.txt`, `.md`, `.png`, `.jpg`, `.jpeg`, `.tiff`, `.tif`, `.bmp`, `.webp`.\n\n## Document-Mode Behavior\nWhen a `document_id` is provided, the bot answers **strictly from the document**. It will never fall back to general knowledge — if the answer isn't in the document, it says so.\n\n## Authentication\nRobot API endpoints (`/api/v1/*`) support optional API key authentication.\n- Set `PSK_API_KEY` in the server `.env` file to enable it.\n- Pass the key via `X-API-Key` header or `api_key` query parameter.\n- If no key is configured on the server, all endpoints are open.\n\nAdmin endpoints (`/admin/api/*`) require session-based authentication via `/admin/login`.\n\n## Rate Limiting\nRobot endpoints are rate-limited to **30 requests/minute** per client (configurable via `API_RATE_LIMIT`).\nClients are identified by `X-Client-ID` header or IP address.\n\n## Streaming (SSE)\nEndpoints returning `text/event-stream` use **Server-Sent Events**.\nEach event is a JSON object prefixed with `data: ` and terminated by `\\n\\n`.",
+    "version": "2.1.0",
     "contact": {
       "name": "PlanetSkool",
       "url": "https://planetskool.com"
@@ -22,11 +22,15 @@
   "tags": [
     {
       "name": "Robot API",
-      "description": "Low-latency endpoints designed for robot hardware integration. Use these for programmatic access."
+      "description": "Low-latency endpoints designed for robot hardware integration. Streams directly from Ollama."
     },
     {
       "name": "Web UI API",
-      "description": "Endpoints used by the PSK Bot web chat interface."
+      "description": "Endpoints used by the PSK Bot web chat interface. Streams directly from Ollama via SSE."
+    },
+    {
+      "name": "Admin API",
+      "description": "Document management endpoints. Requires admin session (login via `/admin/login`)."
     },
     {
       "name": "Health",
@@ -38,7 +42,7 @@
       "post": {
         "tags": ["Robot API"],
         "summary": "Chat (full response)",
-        "description": "Send a message and receive a **complete response** in a single JSON reply.\n\nThis is the primary endpoint for robot hardware — optimized for low latency.\n\n**How it works:**\n1. If `document_id` is provided, searches that document first (RAG)\n2. If document results are weak, falls back to web search\n3. If no `document_id`, uses web search + general knowledge\n4. Simple greetings (\"hi\", \"hello\") get instant responses without LLM",
+        "description": "Send a message and receive a **complete response** in a single JSON reply.\n\nThis is the primary endpoint for robot hardware — optimized for low latency.\n\n**How it works:**\n1. If `document_id` is provided, answers **strictly** from that document (no general knowledge fallback)\n2. If no relevant content is found in the document, the bot says so\n3. If no `document_id`, queries the LLM directly with general knowledge\n4. Simple greetings (\"hi\", \"hello\") get instant responses without LLM",
         "operationId": "robotChat",
         "security": [{"ApiKeyHeader": []}, {}],
         "parameters": [
@@ -56,7 +60,7 @@
               "schema": {"$ref": "#/components/schemas/ChatRequest"},
               "examples": {
                 "simple_question": {
-                  "summary": "Simple question (no document)",
+                  "summary": "General question (direct LLM)",
                   "value": {
                     "message": "What is the capital of France?",
                     "session_id": "robot_01"
@@ -68,18 +72,6 @@
                     "message": "What is the leave policy?",
                     "document_id": "gentari_employee_handbook_e84d2400",
                     "session_id": "robot_01"
-                  }
-                },
-                "with_history": {
-                  "summary": "Follow-up question with history",
-                  "value": {
-                    "message": "Can you explain more about that?",
-                    "document_id": "gentari_employee_handbook_e84d2400",
-                    "session_id": "robot_01",
-                    "history": [
-                      {"role": "user", "content": "What is the leave policy?"},
-                      {"role": "assistant", "content": "The leave policy includes annual leave, sick leave..."}
-                    ]
                   }
                 },
                 "greeting": {
@@ -101,27 +93,27 @@
                 "schema": {"$ref": "#/components/schemas/ChatResponse"},
                 "examples": {
                   "document_answer": {
-                    "summary": "Answer from document",
+                    "summary": "Answer from document (RAG)",
                     "value": {
-                      "response": "The annual leave policy allows employees to take up to 20 days of paid leave per year. 📋 You can apply through the HR portal.",
+                      "response": "The annual leave policy allows employees to take up to 20 days of paid leave per year.",
                       "latency_ms": 2340,
                       "source": "document",
                       "session_id": "robot_01"
                     }
                   },
-                  "web_answer": {
-                    "summary": "Answer from web search",
+                  "llm_answer": {
+                    "summary": "Answer from direct LLM",
                     "value": {
-                      "response": "The capital of France is Paris! 🇫🇷 It's known as the City of Light.",
-                      "latency_ms": 3120,
-                      "source": "web",
+                      "response": "The capital of France is Paris.",
+                      "latency_ms": 1800,
+                      "source": "llm",
                       "session_id": "robot_01"
                     }
                   },
                   "greeting_answer": {
                     "summary": "Greeting (instant)",
                     "value": {
-                      "response": "Hey there! 👋 I'm PSK Bot, your friendly AI assistant. What can I help you with today?",
+                      "response": "Hello! I'm PSK Bot. How can I assist you today?",
                       "latency_ms": 1,
                       "source": "greeting",
                       "session_id": "robot_01"
@@ -140,15 +132,7 @@
               }
             }
           },
-          "401": {
-            "description": "Unauthorized — invalid or missing API key",
-            "content": {
-              "application/json": {
-                "schema": {"$ref": "#/components/schemas/ErrorResponse"},
-                "example": {"error": "Invalid or missing API key."}
-              }
-            }
-          },
+          "401": {"$ref": "#/components/responses/Unauthorized"},
           "404": {
             "description": "Document not found",
             "content": {
@@ -158,24 +142,8 @@
               }
             }
           },
-          "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/json": {
-                "schema": {"$ref": "#/components/schemas/ErrorResponse"},
-                "example": {"error": "Rate limit exceeded. Please wait."}
-              }
-            }
-          },
-          "503": {
-            "description": "Service unavailable",
-            "content": {
-              "application/json": {
-                "schema": {"$ref": "#/components/schemas/ErrorResponse"},
-                "example": {"error": "Service unavailable."}
-              }
-            }
-          }
+          "429": {"$ref": "#/components/responses/RateLimited"},
+          "503": {"$ref": "#/components/responses/ServiceUnavailable"}
         }
       }
     },
@@ -183,7 +151,7 @@
       "post": {
         "tags": ["Robot API"],
         "summary": "Chat (SSE streaming)",
-        "description": "Send a message and receive the response as a **stream of tokens** via Server-Sent Events (SSE).\n\nUse this when the robot needs to display/speak text **as it generates** for a more natural experience.\n\n**SSE Event Format:**\n```\ndata: {\"token\": \"Hello\", \"type\": \"token\"}\ndata: {\"token\": \" there\", \"type\": \"token\"}\ndata: {\"type\": \"done\", \"latency_ms\": 2340, \"source\": \"document\", \"session_id\": \"robot_01\"}\n```\n\n**Event types:**\n- `token` — A chunk of the response text\n- `done` — Stream complete, includes metadata\n- `error` — An error occurred during generation",
+        "description": "Send a message and receive the response as a **stream of tokens** via Server-Sent Events (SSE).\n\nTokens stream directly from Ollama for minimal latency.\n\n**SSE Event Format:**\n```\ndata: {\"token\": \"Hello\", \"type\": \"token\"}\ndata: {\"token\": \" there\", \"type\": \"token\"}\ndata: {\"type\": \"done\", \"latency_ms\": 2340, \"source\": \"document\", \"session_id\": \"robot_01\"}\n```\n\n**Event types:**\n- `token` — A chunk of the response text\n- `done` — Stream complete, includes metadata\n- `error` — An error occurred during generation",
         "operationId": "robotChatStream",
         "security": [{"ApiKeyHeader": []}, {}],
         "parameters": [
@@ -203,8 +171,8 @@
                 "stream_question": {
                   "summary": "Stream a document question",
                   "value": {
-                    "message": "Summarize the project kickoff document",
-                    "document_id": "project_kick_off_71969311",
+                    "message": "Summarize the corporate profile",
+                    "document_id": "fm_48736d23",
                     "session_id": "robot_01"
                   }
                 }
@@ -217,22 +185,12 @@
             "description": "SSE stream of tokens",
             "content": {
               "text/event-stream": {
-                "schema": {
-                  "type": "string",
-                  "description": "Each line is `data: <JSON>\\n\\n`. JSON contains `token` (string) and `type` (\"token\"|\"done\"|\"error\")."
-                },
-                "example": "data: {\"token\": \"The \", \"type\": \"token\"}\n\ndata: {\"token\": \"leave \", \"type\": \"token\"}\n\ndata: {\"token\": \"policy...\", \"type\": \"token\"}\n\ndata: {\"type\": \"done\", \"latency_ms\": 2340, \"source\": \"document\", \"session_id\": \"robot_01\"}\n\n"
+                "schema": {"type": "string"},
+                "example": "data: {\"token\": \"The \", \"type\": \"token\"}\n\ndata: {\"token\": \"company \", \"type\": \"token\"}\n\ndata: {\"type\": \"done\", \"latency_ms\": 2340, \"source\": \"document\", \"session_id\": \"robot_01\"}\n\n"
               }
             }
           },
-          "400": {
-            "description": "Bad request",
-            "content": {
-              "application/json": {
-                "schema": {"$ref": "#/components/schemas/ErrorResponse"}
-              }
-            }
-          },
+          "400": {"description": "Bad request", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
           "401": {"$ref": "#/components/responses/Unauthorized"},
           "429": {"$ref": "#/components/responses/RateLimited"},
           "503": {"$ref": "#/components/responses/ServiceUnavailable"}
@@ -243,7 +201,7 @@
       "get": {
         "tags": ["Health"],
         "summary": "Health check (robot)",
-        "description": "Lightweight health check endpoint for monitoring from robot hardware or load balancers.\n\nReturns `200` when the service is fully operational, `503` when degraded.",
+        "description": "Lightweight health check for monitoring from robot hardware or load balancers.",
         "operationId": "robotHealth",
         "security": [{"ApiKeyHeader": []}, {}],
         "responses": {
@@ -252,11 +210,7 @@
             "content": {
               "application/json": {
                 "schema": {"$ref": "#/components/schemas/HealthResponse"},
-                "example": {
-                  "status": "ok",
-                  "model": "gemma3:1b",
-                  "timestamp": 1739500000.0
-                }
+                "example": {"status": "ok", "model": "gemma3:1b", "timestamp": 1739500000.0}
               }
             }
           },
@@ -265,11 +219,7 @@
             "content": {
               "application/json": {
                 "schema": {"$ref": "#/components/schemas/HealthResponse"},
-                "example": {
-                  "status": "degraded",
-                  "model": "gemma3:1b",
-                  "timestamp": 1739500000.0
-                }
+                "example": {"status": "degraded", "model": "gemma3:1b", "timestamp": 1739500000.0}
               }
             }
           }
@@ -280,7 +230,7 @@
       "get": {
         "tags": ["Robot API"],
         "summary": "List available documents",
-        "description": "Returns a list of all uploaded documents and their processing status.\n\nUse this to discover valid `document_id` values for the chat endpoints.\n\n**Document statuses:**\n- `ready` — Document is indexed and can be queried\n- `processing` — Document is being ingested\n- `error` — Document failed to process",
+        "description": "Returns all uploaded documents and their processing status.\n\nUse this to discover valid `document_id` values for the chat endpoints.\n\n**Document statuses:**\n- `ready` — Indexed and queryable\n- `processing` — Being ingested (with OCR if needed)\n- `failed` — Failed to process\n\n**Supported file types:** `.pdf`, `.docx`, `.txt`, `.md`, `.png`, `.jpg`, `.jpeg`, `.tiff`, `.tif`, `.bmp`, `.webp`\n\nPDF and image files are processed with OCR to extract text from scanned pages, charts, and diagrams.",
         "operationId": "robotListDocuments",
         "security": [{"ApiKeyHeader": []}, {}],
         "responses": {
@@ -291,16 +241,8 @@
                 "schema": {"$ref": "#/components/schemas/DocumentListResponse"},
                 "example": {
                   "documents": [
-                    {
-                      "id": "gentari_employee_handbook_e84d2400",
-                      "name": "Gentari Employee Handbook.pdf",
-                      "status": "ready"
-                    },
-                    {
-                      "id": "project_kick_off_71969311",
-                      "name": "Project Kick Off.pdf",
-                      "status": "ready"
-                    }
+                    {"id": "fm_48736d23", "name": "Corporate Profile.pdf", "status": "ready"},
+                    {"id": "handbook_e84d2400", "name": "Employee Handbook.pdf", "status": "ready"}
                   ]
                 }
               }
@@ -310,11 +252,220 @@
         }
       }
     },
+    "/admin/api/documents": {
+      "get": {
+        "tags": ["Admin API"],
+        "summary": "List all documents",
+        "description": "Returns all documents with full metadata including processing status, chunk count, and error details.",
+        "operationId": "adminListDocuments",
+        "responses": {
+          "200": {
+            "description": "Document list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "documents": {"type": "array", "items": {"$ref": "#/components/schemas/DocumentDetail"}},
+                    "count": {"type": "integer"}
+                  }
+                },
+                "example": {
+                  "documents": [
+                    {
+                      "id": "fm_48736d23",
+                      "name": "Corporate Profile.pdf",
+                      "filename": "Corporate Profile.pdf",
+                      "file_type": "pdf",
+                      "file_size": 2048576,
+                      "status": "ready",
+                      "chunk_count": 42,
+                      "error_message": null,
+                      "created_at": "2026-02-15T18:48:34Z"
+                    }
+                  ],
+                  "count": 1
+                }
+              }
+            }
+          },
+          "401": {"description": "Not authenticated"}
+        }
+      },
+      "post": {
+        "tags": ["Admin API"],
+        "summary": "Upload a document",
+        "description": "Upload a document for ingestion. The file is parsed (with OCR for PDFs/images), chunked, and indexed into the vector store in a background thread.\n\n**Supported file types:** `.pdf`, `.docx`, `.txt`, `.md`, `.png`, `.jpg`, `.jpeg`, `.tiff`, `.tif`, `.bmp`, `.webp`\n\n**Max file size:** 50 MB\n\n**OCR capabilities:**\n- Scanned PDF pages are rendered as images and OCR'd\n- Embedded images in PDFs and DOCX files are extracted and OCR'd\n- Standalone image files are fully OCR'd\n- Images are preprocessed (upscaled, contrast-enhanced, sharpened) for best accuracy",
+        "operationId": "adminUploadDocument",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": ["file"],
+                "properties": {
+                  "file": {"type": "string", "format": "binary", "description": "The document file to upload"},
+                  "name": {"type": "string", "description": "Optional display name (defaults to filename)"}
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Document uploaded, ingestion started",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {"type": "boolean"},
+                    "document": {"$ref": "#/components/schemas/DocumentDetail"},
+                    "message": {"type": "string"}
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "document": {
+                    "id": "fm_48736d23",
+                    "name": "Corporate Profile.pdf",
+                    "filename": "Corporate Profile.pdf",
+                    "file_type": "pdf",
+                    "file_size": 2048576,
+                    "status": "processing",
+                    "chunk_count": 0,
+                    "error_message": null,
+                    "created_at": "2026-02-15T18:48:34Z"
+                  },
+                  "message": "Document uploaded. Ingestion started."
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid file or unsupported type",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/ErrorResponse"},
+                "examples": {
+                  "no_file": {"value": {"error": "No file provided"}},
+                  "bad_type": {"value": {"error": "Unsupported file type: .exe. Supported: .pdf, .docx, .txt, .md, .png, .jpg, .jpeg, .tiff, .tif, .bmp, .webp"}}
+                }
+              }
+            }
+          },
+          "401": {"description": "Not authenticated"}
+        }
+      }
+    },
+    "/admin/api/documents/{doc_id}": {
+      "get": {
+        "tags": ["Admin API"],
+        "summary": "Get document details",
+        "description": "Returns full details for a single document.",
+        "operationId": "adminGetDocument",
+        "parameters": [{"name": "doc_id", "in": "path", "required": true, "schema": {"type": "string"}}],
+        "responses": {
+          "200": {
+            "description": "Document details",
+            "content": {"application/json": {"schema": {"type": "object", "properties": {"document": {"$ref": "#/components/schemas/DocumentDetail"}}}}}
+          },
+          "404": {"description": "Document not found", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
+          "401": {"description": "Not authenticated"}
+        }
+      },
+      "delete": {
+        "tags": ["Admin API"],
+        "summary": "Delete a document",
+        "description": "Deletes a document and its vector store. Cannot delete while processing.",
+        "operationId": "adminDeleteDocument",
+        "parameters": [{"name": "doc_id", "in": "path", "required": true, "schema": {"type": "string"}}],
+        "responses": {
+          "200": {
+            "description": "Document deleted",
+            "content": {"application/json": {"schema": {"type": "object", "properties": {"success": {"type": "boolean"}, "message": {"type": "string"}}}, "example": {"success": true, "message": "Document deleted"}}}
+          },
+          "404": {"description": "Document not found", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
+          "409": {"description": "Document is being processed", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}, "example": {"error": "Cannot delete document while processing"}}}},
+          "401": {"description": "Not authenticated"}
+        }
+      }
+    },
+    "/admin/api/documents/{doc_id}/status": {
+      "get": {
+        "tags": ["Admin API"],
+        "summary": "Get ingestion status",
+        "description": "Returns the current ingestion status of a document, including whether background processing is active.",
+        "operationId": "adminDocumentStatus",
+        "parameters": [{"name": "doc_id", "in": "path", "required": true, "schema": {"type": "string"}}],
+        "responses": {
+          "200": {
+            "description": "Ingestion status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {"type": "string"},
+                    "status": {"type": "string", "enum": ["uploading", "processing", "ready", "failed"]},
+                    "is_processing": {"type": "boolean", "description": "Whether the background ingestion thread is still running"},
+                    "chunk_count": {"type": "integer"},
+                    "error_message": {"type": "string", "nullable": true}
+                  }
+                },
+                "example": {"id": "fm_48736d23", "status": "ready", "is_processing": false, "chunk_count": 42, "error_message": null}
+              }
+            }
+          },
+          "404": {"description": "Document not found", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
+          "401": {"description": "Not authenticated"}
+        }
+      }
+    },
+    "/admin/api/documents/public": {
+      "get": {
+        "tags": ["Web UI API"],
+        "summary": "List chat-ready documents",
+        "description": "Returns documents with `ready` status for the chat document selector. **No authentication required.**",
+        "operationId": "publicListDocuments",
+        "responses": {
+          "200": {
+            "description": "Ready documents",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "documents": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {"type": "string"},
+                          "name": {"type": "string"},
+                          "chunk_count": {"type": "integer"}
+                        }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "documents": [
+                    {"id": "fm_48736d23", "name": "Corporate Profile.pdf", "chunk_count": 42}
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/chat": {
       "post": {
         "tags": ["Web UI API"],
         "summary": "Chat (full response)",
-        "description": "Send a question and get a complete response. Uses the default vector store for RAG.\n\nThis endpoint is used by the web UI. For robot integration, prefer `/api/v1/chat`.",
+        "description": "Send a question and get a complete response. Uses the default vector store for RAG, or falls back to direct LLM.\n\nFor robot integration, prefer `/api/v1/chat`.",
         "operationId": "webChat",
         "requestBody": {
           "required": true,
@@ -324,21 +475,11 @@
                 "type": "object",
                 "required": ["question"],
                 "properties": {
-                  "question": {
-                    "type": "string",
-                    "description": "The user's question",
-                    "example": "What is the leave policy?"
-                  },
+                  "question": {"type": "string", "description": "The user's question", "example": "What is the leave policy?"},
                   "history": {
                     "type": "array",
                     "description": "Conversation history",
-                    "items": {
-                      "type": "object",
-                      "properties": {
-                        "user": {"type": "string"},
-                        "bot": {"type": "string"}
-                      }
-                    },
+                    "items": {"type": "object", "properties": {"user": {"type": "string"}, "bot": {"type": "string"}}},
                     "default": []
                   }
                 }
@@ -351,35 +492,12 @@
             "description": "Successful response",
             "content": {
               "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "response": {
-                      "type": "string",
-                      "description": "Complete bot response"
-                    },
-                    "latency_ms": {
-                      "type": "integer",
-                      "description": "Processing time in milliseconds"
-                    }
-                  }
-                },
-                "example": {
-                  "response": "The leave policy allows...",
-                  "latency_ms": 2340
-                }
+                "schema": {"type": "object", "properties": {"response": {"type": "string"}, "latency_ms": {"type": "integer"}}},
+                "example": {"response": "The leave policy allows...", "latency_ms": 2340}
               }
             }
           },
-          "400": {
-            "description": "Missing question",
-            "content": {
-              "application/json": {
-                "schema": {"$ref": "#/components/schemas/ErrorResponse"},
-                "example": {"error": "Question is required."}
-              }
-            }
-          },
+          "400": {"description": "Missing question", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
           "503": {"$ref": "#/components/responses/ServiceUnavailable"}
         }
       }
@@ -388,7 +506,7 @@
       "post": {
         "tags": ["Web UI API"],
         "summary": "Chat (SSE streaming)",
-        "description": "Send a question and receive tokens via Server-Sent Events.\n\nUsed by the web UI for real-time typing effect.\n\n**SSE format:** Each event is `data: <token_text>\\n\\n`. Final event is `data: [DONE]\\n\\n`.",
+        "description": "Send a question and receive tokens via SSE, streamed directly from Ollama.\n\n**SSE format:** `data: <token_text>\\n\\n`. Final event: `data: [DONE]\\n\\n`.",
         "operationId": "webStream",
         "requestBody": {
           "required": true,
@@ -398,44 +516,45 @@
                 "type": "object",
                 "required": ["question"],
                 "properties": {
-                  "question": {
-                    "type": "string",
-                    "example": "What is the leave policy?"
-                  },
-                  "history": {
-                    "type": "array",
-                    "items": {
-                      "type": "object",
-                      "properties": {
-                        "user": {"type": "string"},
-                        "bot": {"type": "string"}
-                      }
-                    },
-                    "default": []
-                  }
+                  "question": {"type": "string", "example": "What is the leave policy?"},
+                  "history": {"type": "array", "items": {"type": "object", "properties": {"user": {"type": "string"}, "bot": {"type": "string"}}}, "default": []}
                 }
               }
             }
           }
         },
         "responses": {
-          "200": {
-            "description": "SSE stream",
-            "content": {
-              "text/event-stream": {
-                "schema": {"type": "string"},
-                "example": "data: The \n\ndata: leave \n\ndata: policy...\n\ndata: [DONE]\n\n"
+          "200": {"description": "SSE stream", "content": {"text/event-stream": {"schema": {"type": "string"}, "example": "data: The \n\ndata: leave \n\ndata: policy...\n\ndata: [DONE]\n\n"}}},
+          "400": {"description": "Missing question", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
+          "503": {"$ref": "#/components/responses/ServiceUnavailable"}
+        }
+      }
+    },
+    "/api/stream_prepared": {
+      "post": {
+        "tags": ["Web UI API"],
+        "summary": "Stream from pre-built messages",
+        "description": "Stream a response from Ollama using pre-built messages from `/api/prepare` or `/api/prepare_free`.\n\n**Flow:** Frontend → `/api/prepare` → gets messages → `/api/stream_prepared` → SSE tokens from Ollama",
+        "operationId": "webStreamPrepared",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["messages"],
+                "properties": {
+                  "messages": {"type": "array", "description": "Message array from prepare endpoint's `history_messages`", "items": {"type": "object", "properties": {"role": {"type": "string", "enum": ["system", "user", "assistant"]}, "content": {"type": "string"}}}},
+                  "model": {"type": "string", "description": "Ollama model (defaults to configured model)", "example": "gemma3:1b"},
+                  "options": {"type": "object", "description": "Ollama generation options override", "additionalProperties": true}
+                }
               }
             }
-          },
-          "400": {
-            "description": "Missing question",
-            "content": {
-              "application/json": {
-                "schema": {"$ref": "#/components/schemas/ErrorResponse"}
-              }
-            }
-          },
+          }
+        },
+        "responses": {
+          "200": {"description": "SSE stream of tokens", "content": {"text/event-stream": {"schema": {"type": "string"}, "example": "data: {\"token\": \"Hello\", \"type\": \"token\"}\n\ndata: {\"type\": \"done\"}\n\n"}}},
+          "400": {"description": "Missing messages", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
           "503": {"$ref": "#/components/responses/ServiceUnavailable"}
         }
       }
@@ -444,7 +563,7 @@
       "post": {
         "tags": ["Web UI API"],
         "summary": "Prepare RAG prompt (document mode)",
-        "description": "Builds a RAG-augmented prompt for a specific document and returns it with Ollama options.\n\nThe web UI calls this to get the prompt, then calls Ollama directly for streaming.\n\n**Flow:** Web UI → `/api/prepare` → gets prompt → calls Ollama `/api/chat` directly",
+        "description": "Builds a RAG-augmented prompt for a specific document. Answers **strictly from the document** — no general knowledge fallback.\n\n**Flow:** Frontend → `/api/prepare` → gets prompt + messages → `/api/stream_prepared` → SSE stream from Ollama",
         "operationId": "webPrepare",
         "requestBody": {
           "required": true,
@@ -454,27 +573,9 @@
                 "type": "object",
                 "required": ["question", "document_id"],
                 "properties": {
-                  "question": {
-                    "type": "string",
-                    "example": "What is the leave policy?"
-                  },
-                  "document_id": {
-                    "type": "string",
-                    "description": "ID of the document to query",
-                    "example": "gentari_employee_handbook_e84d2400"
-                  },
-                  "history": {
-                    "type": "array",
-                    "description": "Chat history for context",
-                    "items": {
-                      "type": "object",
-                      "properties": {
-                        "role": {"type": "string", "enum": ["user", "assistant"]},
-                        "content": {"type": "string"}
-                      }
-                    },
-                    "default": []
-                  }
+                  "question": {"type": "string", "example": "What is the leave policy?"},
+                  "document_id": {"type": "string", "description": "ID of the document to query", "example": "fm_48736d23"},
+                  "history": {"type": "array", "description": "Chat history for context", "items": {"type": "object", "properties": {"role": {"type": "string", "enum": ["user", "assistant"]}, "content": {"type": "string"}}}, "default": []}
                 }
               }
             }
@@ -490,52 +591,24 @@
                   "with_context": {
                     "summary": "Document context found",
                     "value": {
-                      "prompt": "You are PSK Bot...\n\nContext: ...\n\nQuestion: What is the leave policy?",
+                      "prompt": "You are a professional assistant...\n\nCONTEXT: ...\n\nQUESTION: What is the leave policy?",
                       "has_context": true,
-                      "has_web_context": false,
                       "model": "gemma3:1b",
-                      "options": {
-                        "temperature": 0.4,
-                        "top_p": 0.85,
-                        "num_ctx": 2048,
-                        "num_predict": 384
-                      },
-                      "history_messages": [
-                        {"role": "system", "content": "You are PSK Bot..."},
-                        {"role": "user", "content": "What is the leave policy?"}
-                      ],
-                      "document_id": "gentari_employee_handbook_e84d2400"
+                      "options": {"temperature": 0.2, "top_p": 0.8, "num_ctx": 2048, "num_predict": 384},
+                      "history_messages": [{"role": "system", "content": "You are PSK Bot..."}, {"role": "user", "content": "What is the leave policy?"}],
+                      "document_id": "fm_48736d23"
                     }
                   },
                   "greeting": {
                     "summary": "Greeting detected (no LLM needed)",
-                    "value": {
-                      "is_greeting": true,
-                      "response": "Hey there! 👋 I'm PSK Bot. What can I help you with?",
-                      "model": "gemma3:1b"
-                    }
+                    "value": {"is_greeting": true, "response": "Hello! I'm PSK Bot. How can I assist you today?", "model": "gemma3:1b"}
                   }
                 }
               }
             }
           },
-          "400": {
-            "description": "Missing question or document_id, or document not ready",
-            "content": {
-              "application/json": {
-                "schema": {"$ref": "#/components/schemas/ErrorResponse"}
-              }
-            }
-          },
-          "404": {
-            "description": "Document not found",
-            "content": {
-              "application/json": {
-                "schema": {"$ref": "#/components/schemas/ErrorResponse"},
-                "example": {"error": "Document not found."}
-              }
-            }
-          },
+          "400": {"description": "Missing question or document_id, or document not ready", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
+          "404": {"description": "Document not found", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}, "example": {"error": "Document not found."}}}},
           "503": {"$ref": "#/components/responses/ServiceUnavailable"}
         }
       }
@@ -544,7 +617,7 @@
       "post": {
         "tags": ["Web UI API"],
         "summary": "Prepare prompt (free chat mode)",
-        "description": "Builds a prompt for free-form chat without requiring a document.\n\nUses web search + general knowledge. The web UI calls this for the \"Free Chat\" mode.",
+        "description": "Builds a prompt for free-form chat without requiring a document. Queries the LLM directly with general knowledge.\n\n**Flow:** Frontend → `/api/prepare_free` → gets messages → `/api/stream_prepared` → SSE stream from Ollama",
         "operationId": "webPrepareFree",
         "requestBody": {
           "required": true,
@@ -554,43 +627,16 @@
                 "type": "object",
                 "required": ["question"],
                 "properties": {
-                  "question": {
-                    "type": "string",
-                    "example": "What is the weather in Tokyo?"
-                  },
-                  "history": {
-                    "type": "array",
-                    "items": {
-                      "type": "object",
-                      "properties": {
-                        "role": {"type": "string", "enum": ["user", "assistant"]},
-                        "content": {"type": "string"}
-                      }
-                    },
-                    "default": []
-                  }
+                  "question": {"type": "string", "example": "Tell me about quantum computing"},
+                  "history": {"type": "array", "items": {"type": "object", "properties": {"role": {"type": "string", "enum": ["user", "assistant"]}, "content": {"type": "string"}}}, "default": []}
                 }
               }
             }
           }
         },
         "responses": {
-          "200": {
-            "description": "Prepared prompt",
-            "content": {
-              "application/json": {
-                "schema": {"$ref": "#/components/schemas/PrepareResponse"}
-              }
-            }
-          },
-          "400": {
-            "description": "Missing question",
-            "content": {
-              "application/json": {
-                "schema": {"$ref": "#/components/schemas/ErrorResponse"}
-              }
-            }
-          },
+          "200": {"description": "Prepared prompt", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PrepareResponse"}}}},
+          "400": {"description": "Missing question", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
           "503": {"$ref": "#/components/responses/ServiceUnavailable"}
         }
       }
@@ -599,28 +645,15 @@
       "get": {
         "tags": ["Health"],
         "summary": "Detailed health check",
-        "description": "Returns detailed service health including RAG readiness and vector store status.\n\nUsed by Nginx health checks and monitoring dashboards.",
+        "description": "Returns detailed service health including RAG readiness, vector store status, and OCR availability.\n\nUsed by Nginx health checks and monitoring dashboards.",
         "operationId": "healthCheck",
         "responses": {
           "200": {
             "description": "All services healthy",
             "content": {
               "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "status": {"type": "string", "enum": ["ok", "degraded"]},
-                    "rag_ready": {"type": "boolean"},
-                    "vector_store_ready": {"type": "boolean"},
-                    "model": {"type": "string", "nullable": true}
-                  }
-                },
-                "example": {
-                  "status": "ok",
-                  "rag_ready": true,
-                  "vector_store_ready": true,
-                  "model": "gemma3:1b"
-                }
+                "schema": {"type": "object", "properties": {"status": {"type": "string", "enum": ["ok", "degraded"]}, "rag_ready": {"type": "boolean"}, "vector_store_ready": {"type": "boolean"}, "model": {"type": "string", "nullable": true}}},
+                "example": {"status": "ok", "rag_ready": true, "vector_store_ready": true, "model": "gemma3:1b"}
               }
             }
           },
@@ -628,21 +661,7 @@
             "description": "Service degraded",
             "content": {
               "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "status": {"type": "string"},
-                    "rag_ready": {"type": "boolean"},
-                    "vector_store_ready": {"type": "boolean"},
-                    "model": {"type": "string", "nullable": true}
-                  }
-                },
-                "example": {
-                  "status": "degraded",
-                  "rag_ready": false,
-                  "vector_store_ready": false,
-                  "model": null
-                }
+                "example": {"status": "degraded", "rag_ready": false, "vector_store_ready": false, "model": null}
               }
             }
           }
@@ -670,114 +689,43 @@
         "type": "object",
         "required": ["message"],
         "properties": {
-          "message": {
-            "type": "string",
-            "description": "The user's message or question. Can also use `question` as the key name.",
-            "example": "What is the leave policy?"
-          },
-          "document_id": {
-            "type": "string",
-            "description": "Optional. ID of a specific document to query. If omitted, uses web search + general knowledge.\n\nGet valid IDs from `GET /api/v1/documents`.",
-            "example": "gentari_employee_handbook_e84d2400",
-            "nullable": true
-          },
-          "session_id": {
-            "type": "string",
-            "description": "Optional. Client session identifier for tracking conversations. Defaults to client IP.",
-            "example": "robot_01"
-          },
+          "message": {"type": "string", "description": "The user's message or question.", "example": "What is the leave policy?"},
+          "document_id": {"type": "string", "description": "Optional. ID of a specific document to query. When provided, the bot answers **strictly** from that document — no general knowledge fallback.\n\nGet valid IDs from `GET /api/v1/documents`.", "example": "fm_48736d23", "nullable": true},
+          "session_id": {"type": "string", "description": "Optional. Client session identifier. Defaults to client IP.", "example": "robot_01"},
           "history": {
             "type": "array",
-            "description": "Optional. Previous conversation turns for context in follow-up questions.",
-            "items": {
-              "type": "object",
-              "properties": {
-                "role": {
-                  "type": "string",
-                  "enum": ["user", "assistant"],
-                  "description": "Who sent the message"
-                },
-                "content": {
-                  "type": "string",
-                  "description": "The message content"
-                }
-              },
-              "required": ["role", "content"]
-            },
-            "example": [
-              {"role": "user", "content": "What is the leave policy?"},
-              {"role": "assistant", "content": "The leave policy includes annual leave, sick leave..."}
-            ]
+            "description": "Optional. Previous conversation turns for follow-up context.",
+            "items": {"type": "object", "properties": {"role": {"type": "string", "enum": ["user", "assistant"]}, "content": {"type": "string"}}, "required": ["role", "content"]},
+            "example": [{"role": "user", "content": "What is the leave policy?"}, {"role": "assistant", "content": "The leave policy includes..."}]
           }
         }
       },
       "ChatResponse": {
         "type": "object",
         "properties": {
-          "response": {
-            "type": "string",
-            "description": "The complete bot response text"
-          },
-          "latency_ms": {
-            "type": "integer",
-            "description": "Total processing time in milliseconds (includes retrieval + generation)"
-          },
-          "source": {
-            "type": "string",
-            "enum": ["document", "web", "document+web", "general", "greeting"],
-            "description": "Where the answer came from:\n- `document` — From uploaded document via RAG\n- `web` — From web search results\n- `document+web` — Combined document + web\n- `general` — LLM general knowledge\n- `greeting` — Instant greeting response (no LLM used)"
-          },
-          "session_id": {
-            "type": "string",
-            "description": "Echo of the session_id from the request"
-          }
+          "response": {"type": "string", "description": "The complete bot response text"},
+          "latency_ms": {"type": "integer", "description": "Total processing time in milliseconds"},
+          "source": {"type": "string", "enum": ["document", "llm", "greeting"], "description": "Where the answer came from:\n- `document` — From uploaded document via RAG (strict, no outside knowledge)\n- `llm` — Direct LLM response (general knowledge)\n- `greeting` — Instant greeting response (no LLM used)"},
+          "session_id": {"type": "string", "description": "Echo of the session_id from the request"}
         }
       },
       "StreamEvent": {
         "type": "object",
         "description": "A single SSE event in the stream",
         "properties": {
-          "token": {
-            "type": "string",
-            "description": "A chunk of response text (present when type=token)"
-          },
-          "type": {
-            "type": "string",
-            "enum": ["token", "done", "error"],
-            "description": "Event type"
-          },
-          "latency_ms": {
-            "type": "integer",
-            "description": "Total time in ms (present when type=done)"
-          },
-          "source": {
-            "type": "string",
-            "description": "Answer source (present when type=done)"
-          },
-          "session_id": {
-            "type": "string",
-            "description": "Session ID (present when type=done)"
-          }
+          "token": {"type": "string", "description": "A chunk of response text (present when type=token)"},
+          "type": {"type": "string", "enum": ["token", "done", "error"], "description": "Event type"},
+          "latency_ms": {"type": "integer", "description": "Total time in ms (present when type=done)"},
+          "source": {"type": "string", "enum": ["document", "llm", "greeting"], "description": "Answer source (present when type=done)"},
+          "session_id": {"type": "string", "description": "Session ID (present when type=done)"}
         }
       },
       "HealthResponse": {
         "type": "object",
         "properties": {
-          "status": {
-            "type": "string",
-            "enum": ["ok", "degraded"],
-            "description": "`ok` = fully operational, `degraded` = service issues"
-          },
-          "model": {
-            "type": "string",
-            "nullable": true,
-            "description": "Currently loaded LLM model name"
-          },
-          "timestamp": {
-            "type": "number",
-            "format": "double",
-            "description": "Unix timestamp of the health check"
-          }
+          "status": {"type": "string", "enum": ["ok", "degraded"]},
+          "model": {"type": "string", "nullable": true, "description": "Currently loaded LLM model"},
+          "timestamp": {"type": "number", "format": "double", "description": "Unix timestamp"}
         }
       },
       "DocumentListResponse": {
@@ -788,82 +736,47 @@
             "items": {
               "type": "object",
               "properties": {
-                "id": {
-                  "type": "string",
-                  "description": "Document ID — use this in chat requests"
-                },
-                "name": {
-                  "type": "string",
-                  "description": "Original filename"
-                },
-                "status": {
-                  "type": "string",
-                  "enum": ["ready", "processing", "error"],
-                  "description": "Processing status"
-                }
+                "id": {"type": "string", "description": "Document ID — use this in chat requests"},
+                "name": {"type": "string", "description": "Display name"},
+                "status": {"type": "string", "enum": ["ready", "processing", "failed"]}
               }
             }
           }
         }
       },
+      "DocumentDetail": {
+        "type": "object",
+        "description": "Full document metadata returned by admin endpoints",
+        "properties": {
+          "id": {"type": "string"},
+          "name": {"type": "string", "description": "Display name"},
+          "filename": {"type": "string", "description": "Original uploaded filename"},
+          "file_type": {"type": "string", "description": "File extension without dot", "enum": ["pdf", "docx", "txt", "md", "png", "jpg", "jpeg", "tiff", "tif", "bmp", "webp"]},
+          "file_size": {"type": "integer", "description": "File size in bytes"},
+          "status": {"type": "string", "enum": ["uploading", "processing", "ready", "failed"]},
+          "chunk_count": {"type": "integer", "description": "Number of text chunks after ingestion"},
+          "error_message": {"type": "string", "nullable": true, "description": "Error details if status is failed"},
+          "created_at": {"type": "string", "format": "date-time"}
+        }
+      },
       "PrepareResponse": {
         "type": "object",
-        "description": "Response from prepare endpoints — contains the assembled prompt and Ollama options for direct LLM calls",
+        "description": "Response from prepare endpoints — contains the assembled prompt and Ollama options for streaming via /api/stream_prepared",
         "properties": {
-          "prompt": {
-            "type": "string",
-            "description": "The fully assembled RAG prompt with context"
-          },
-          "has_context": {
-            "type": "boolean",
-            "description": "Whether document context was found"
-          },
-          "has_web_context": {
-            "type": "boolean",
-            "description": "Whether web search results were included"
-          },
-          "model": {
-            "type": "string",
-            "description": "Ollama model to use"
-          },
-          "options": {
-            "type": "object",
-            "description": "Ollama generation options (temperature, top_p, etc.)",
-            "additionalProperties": true
-          },
-          "history_messages": {
-            "type": "array",
-            "description": "Complete message array for Ollama — includes system prompt, history, and current question with RAG context",
-            "items": {
-              "type": "object",
-              "properties": {
-                "role": {"type": "string", "enum": ["system", "user", "assistant"]},
-                "content": {"type": "string"}
-              }
-            }
-          },
-          "document_id": {
-            "type": "string",
-            "description": "Echo of the document_id (only in /api/prepare)",
-            "nullable": true
-          },
-          "is_greeting": {
-            "type": "boolean",
-            "description": "If true, `response` contains a direct greeting — no LLM call needed"
-          },
-          "response": {
-            "type": "string",
-            "description": "Direct response (only present for greetings)"
-          }
+          "prompt": {"type": "string", "description": "The fully assembled prompt (with RAG context if applicable)"},
+          "has_context": {"type": "boolean", "description": "Whether document context was found and included"},
+          "model": {"type": "string", "description": "Ollama model to use"},
+          "options": {"type": "object", "description": "Ollama generation options (temperature, top_p, etc.)", "additionalProperties": true},
+          "history_messages": {"type": "array", "description": "Complete message array for Ollama. Pass directly to /api/stream_prepared.", "items": {"type": "object", "properties": {"role": {"type": "string", "enum": ["system", "user", "assistant"]}, "content": {"type": "string"}}}},
+          "document_id": {"type": "string", "description": "Echo of the document_id (only in /api/prepare)", "nullable": true},
+          "is_greeting": {"type": "boolean", "description": "If true, `response` contains a direct greeting — no LLM call needed"},
+          "response": {"type": "string", "description": "Direct response (only present for greetings)"}
         }
       },
       "ErrorResponse": {
         "type": "object",
         "properties": {
-          "error": {
-            "type": "string",
-            "description": "Human-readable error message"
-          }
+          "error": {"type": "string", "description": "Human-readable error message"}
         },
         "required": ["error"]
       }
@@ -871,30 +784,15 @@
     "responses": {
       "Unauthorized": {
         "description": "Invalid or missing API key",
-        "content": {
-          "application/json": {
-            "schema": {"$ref": "#/components/schemas/ErrorResponse"},
-            "example": {"error": "Invalid or missing API key."}
-          }
-        }
+        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}, "example": {"error": "Invalid or missing API key."}}}
       },
       "RateLimited": {
         "description": "Rate limit exceeded (30 req/min per client)",
-        "content": {
-          "application/json": {
-            "schema": {"$ref": "#/components/schemas/ErrorResponse"},
-            "example": {"error": "Rate limit exceeded. Please wait."}
-          }
-        }
+        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}, "example": {"error": "Rate limit exceeded. Please wait."}}}
       },
       "ServiceUnavailable": {
-        "description": "Service unavailable — Ollama or RAG not ready",
-        "content": {
-          "application/json": {
-            "schema": {"$ref": "#/components/schemas/ErrorResponse"},
-            "example": {"error": "Service unavailable."}
-          }
-        }
+        "description": "Service unavailable — Ollama not ready",
+        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}, "example": {"error": "Service unavailable."}}}
       }
     }
   }

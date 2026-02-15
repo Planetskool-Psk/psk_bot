@@ -1,5 +1,4 @@
 """Flask extension instances."""
 
-from flask_socketio import SocketIO
-
-socketio = SocketIO(cors_allowed_origins="*")
+# Extensions module — no WebSocket dependencies needed.
+# SSE streaming is handled via standard Flask HTTP routes.

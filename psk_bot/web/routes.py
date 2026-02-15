@@ -311,21 +311,8 @@ def api_prepare():
         current_app.logger.info(f"Search query: '{question}' -> '{search_query}'")
         documents = doc_vector_store.search(search_query, k=5)
 
-    # If document results are weak, supplement with web search
-    web_context = ""
-    best_doc_score = 0.0
-    if documents:
-        best_doc_score = float(documents[0].get("relevance", documents[0].get("similarity", 0.0)))
-
-    if (not documents or best_doc_score < 0.4) and hasattr(services, 'web_search') and services.web_search.enabled:
-        current_app.logger.info("Document results weak (score=%.3f), searching web...", best_doc_score)
-        web_context = services.web_search.search_and_summarize(question)
-    
-    # Build the current prompt with context
-    if documents or web_context:
-        current_prompt = rag._prompt_builder.build(question, documents, [], web_context)
-    else:
-        current_prompt = question
+    # Always build a RAG prompt from the selected document — never fall back to general LLM
+    current_prompt = rag._prompt_builder.build(question, documents, [])
     
     # Build messages array for Ollama with conversation history
     # Format: system message (optional) + history + current question with RAG context
@@ -335,12 +322,13 @@ def api_prepare():
     system_message = (
         "You are PSK Bot, a professional AI assistant.\n"
         "Guidelines:\n"
-        "- Answer strictly from the provided context. Do not fabricate information.\n"
+        "- Answer ONLY from the provided document context. Do not use outside knowledge.\n"
+        "- If the answer is not in the context, clearly state: 'This information is not available in the selected document.'\n"
         "- Be precise and to the point. Avoid long paragraphs — use bullet points or short statements.\n"
         "- Maintain a professional, clear tone. No excessive emojis or filler language.\n"
         "- Never reference document internals (no 'Section X', 'Page Y', 'Document 1').\n"
         "- For follow-up questions, use conversation history for continuity.\n"
-        "- If the context doesn't contain the answer, say so directly."
+        "- Do not fabricate or infer information beyond what is explicitly stated in the context."
     )
     
     history_messages.append({
@@ -368,7 +356,6 @@ def api_prepare():
     return jsonify({
         "prompt": current_prompt,
         "has_context": bool(documents),
-        "has_web_context": bool(web_context),
         "model": services.llm.model,
         "options": rag._config.ollama_options,
         "history_messages": history_messages,
@@ -379,7 +366,7 @@ def api_prepare():
 @bp.post("/api/prepare_free")
 def api_prepare_free():
     """Prepare a prompt for free-form chat without requiring a document.
-    Uses web search + general knowledge."""
+    Uses direct LLM conversation for general knowledge."""
     payload: Dict[str, Any] = request.get_json(silent=True) or {}
     question = str(payload.get("question") or payload.get("message") or "").strip()
     history: List[Dict[str, str]] = payload.get("history") or []
@@ -404,22 +391,14 @@ def api_prepare_free():
             "model": services.llm.model,
         })
 
-    # Search the web for context
-    web_context = ""
-    if hasattr(services, 'web_search') and services.web_search.enabled:
-        web_context = services.web_search.search_and_summarize(question)
-
-    # Build prompt
+    # Build prompt — direct LLM conversation (no web search)
     rag = services.rag_service
-    if web_context:
-        current_prompt = rag._prompt_builder.build(question, [], [], web_context)
-    else:
-        current_prompt = question
+    current_prompt = question
 
     system_message = (
         "You are PSK Bot, a professional AI assistant.\n"
         "Guidelines:\n"
-        "- Use web search results if provided; otherwise use your general knowledge.\n"
+        "- Use your general knowledge to answer the question.\n"
         "- Be precise and direct. Avoid filler or essay-length responses.\n"
         "- Use bullet points or numbered lists when presenting multiple items.\n"
         "- Maintain a professional, clear tone throughout.\n"
@@ -439,7 +418,6 @@ def api_prepare_free():
     return jsonify({
         "prompt": current_prompt,
         "has_context": False,
-        "has_web_context": bool(web_context),
         "model": services.llm.model,
         "options": rag._config.ollama_options,
         "history_messages": history_messages,
@@ -456,7 +434,7 @@ def robot_chat():
     """Direct chat endpoint optimized for robot hardware.
     
     Accepts a question and returns a complete response in one call.
-    Supports both document-based and free-form queries.
+    Supports both document-based RAG and free-form direct LLM queries.
     Designed for low-latency, single-request/response pattern.
     
     Request JSON:
@@ -471,7 +449,7 @@ def robot_chat():
         {
             "response": "...",
             "latency_ms": 1234,
-            "source": "document" | "web" | "general",
+            "source": "document" | "llm" | "greeting",
             "session_id": "robot_01"
         }
     """
@@ -509,7 +487,7 @@ def robot_chat():
         })
 
     rag = services.rag_service
-    source = "general"
+    source = "llm"
 
     # If document_id is provided, do document-specific RAG
     if document_id:
@@ -528,25 +506,13 @@ def robot_chat():
         if doc_vector_store.ensure_ready():
             search_query = extract_search_terms(question)
             documents = doc_vector_store.search(search_query, k=5)
-        if documents:
-            source = "document"
-
-        web_context = ""
-        best_doc_score = float(documents[0].get("relevance", documents[0].get("similarity", 0.0))) if documents else 0.0
-        if (not documents or best_doc_score < 0.4) and hasattr(services, "web_search") and services.web_search.enabled:
-            web_context = services.web_search.search_and_summarize(question)
-            if web_context:
-                source = "web" if not documents else "document+web"
-
-        prompt = rag._prompt_builder.build(question, documents, history, web_context) if (documents or web_context) else question
+        source = "document"
+        # Always answer from the selected document — no LLM fallback
+        prompt = rag._prompt_builder.build(question, documents, history)
     else:
-        # Free-form: web search + general knowledge
-        web_context = ""
-        if hasattr(services, "web_search") and services.web_search.enabled:
-            web_context = services.web_search.search_and_summarize(question)
-            if web_context:
-                source = "web"
-        prompt = rag._prompt_builder.build(question, [], history, web_context) if web_context else question
+        # Free-form: direct LLM conversation
+        source = "llm"
+        prompt = question
 
     # Stream internally and collect full response
     tokens: List[str] = []
@@ -597,7 +563,7 @@ def robot_chat_stream():
 
     def generate():
         start = time.perf_counter()
-        source = "general"
+        source = "llm"
 
         # Greetings — instant
         if is_greeting(question):
@@ -618,22 +584,13 @@ def robot_chat_stream():
                 doc_vs = VectorStoreService.for_document(document_id)
                 if doc_vs.ensure_ready():
                     documents = doc_vs.search(extract_search_terms(question), k=5)
-            if documents:
-                source = "document"
-            web_ctx = ""
-            best = float(documents[0].get("relevance", documents[0].get("similarity", 0.0))) if documents else 0.0
-            if (not documents or best < 0.4) and hasattr(services, "web_search") and services.web_search.enabled:
-                web_ctx = services.web_search.search_and_summarize(question)
-                if web_ctx:
-                    source = "web" if not documents else "document+web"
-            prompt = rag._prompt_builder.build(question, documents, history, web_ctx) if (documents or web_ctx) else question
+            source = "document"
+            # Always answer from the selected document — no LLM fallback
+            prompt = rag._prompt_builder.build(question, documents, history)
         else:
-            web_ctx = ""
-            if hasattr(services, "web_search") and services.web_search.enabled:
-                web_ctx = services.web_search.search_and_summarize(question)
-                if web_ctx:
-                    source = "web"
-            prompt = rag._prompt_builder.build(question, [], history, web_ctx) if web_ctx else question
+            # Free-form: direct LLM conversation
+            source = "llm"
+            prompt = question
 
         # Stream tokens
         try:

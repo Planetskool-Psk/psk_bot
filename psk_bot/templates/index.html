@@ -524,7 +524,7 @@
       </div>
       <div class="header-right">
         <div class="mode-toggle">
-          <button class="mode-btn active" data-mode="free" title="Chat freely with AI + web search">&#x1F4AC; Free Chat</button>
+          <button class="mode-btn active" data-mode="free" title="Chat freely with AI">&#x1F4AC; Free Chat</button>
           <button class="mode-btn" data-mode="doc" title="Chat with your uploaded documents">&#x1F4C4; Documents</button>
         </div>
         <div class="doc-selector-wrapper" id="doc-selector-wrapper">
@@ -547,7 +547,7 @@
         <div class="welcome-icon">&#x1F916;</div>
         <div class="welcome-title">Welcome to PSK Bot</div>
         <div class="welcome-text">
-          I can help you find information from your documents, search the web, or answer general questions.
+          I can help you find information from your documents or answer general questions.
           How can I assist you today?
         </div>
         <div class="quick-actions">
@@ -631,7 +631,7 @@
         chatWindow.innerHTML = '<div class="welcome-message">' +
           '<div class="welcome-icon">\uD83E\uDD16</div>' +
           '<div class="welcome-title">Welcome to PSK Bot</div>' +
-          '<div class="welcome-text">I can search the web, answer questions, or help with documents. How can I assist you?</div>' +
+          '<div class="welcome-text">I can answer questions, help with documents, or chat about anything. How can I assist you?</div>' +
           '<div class="quick-actions">' +
           '<button class="quick-action" data-msg="What can you do?">What can you do?</button>' +
           '<button class="quick-action" data-msg="Tell me a fun fact">Fun fact</button>' +
@@ -869,7 +869,7 @@
             removeCursor();
             if (currentBotMessageContainer) currentBotMessageContainer.classList.remove('streaming');
           } else {
-            const { model, options, history_messages, has_web_context } = prepData;
+            const { model, options, history_messages } = prepData;
             const messages = history_messages || [{ role: 'user', content: prepData.prompt }];
 
             const response = await fetch('/api/stream_prepared', {
@@ -903,13 +903,6 @@
             }
 
             await new Promise(r => requestAnimationFrame(r));
-
-            if (has_web_context && currentBotMessageContainer) {
-              const badge = document.createElement('div');
-              badge.className = 'source-badge';
-              badge.innerHTML = '\uD83C\uDF10 Includes web search results';
-              currentBotMessageContainer.appendChild(badge);
-            }
 
             conversationHistory.push({ role: 'assistant', content: rawTextBuffer, document_id: activeDocumentId });
             removeCursor();

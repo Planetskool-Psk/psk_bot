@@ -14,7 +14,7 @@ backlog = 64
 # For 2-core VM: 1 worker (gevent handles concurrency via greenlets)
 # Multiple workers would duplicate the model in memory
 workers = 1
-worker_class = "geventwebsocket.gunicorn.workers.GeventWebSocketWorker"
+worker_class = "gevent"
 worker_connections = 100
 timeout = 120
 keepalive = 5

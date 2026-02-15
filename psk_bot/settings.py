@@ -60,20 +60,16 @@ class AppSettings:
         self.api_rate_limit: int = int(os.getenv("API_RATE_LIMIT", 30))  # requests per minute
         self.api_key: str = os.getenv("PSK_API_KEY", "")  # API key for robot hardware
 
-        # Web search settings
-        self.web_search_enabled: bool = os.getenv("WEB_SEARCH_ENABLED", "true").lower() == "true"
-        self.web_search_max_results: int = int(os.getenv("WEB_SEARCH_MAX_RESULTS", "3"))
-        self.web_search_timeout: int = int(os.getenv("WEB_SEARCH_TIMEOUT", "10"))
-
         self.prompt_template: str = os.getenv(
             "PROMPT_TEMPLATE",
             (
-                "You are a professional assistant. Answer the QUESTION using only the CONTEXT below.\n"
+                "You are a professional assistant. Answer the QUESTION using the CONTEXT below if relevant.\n"
                 "Rules:\n"
                 "- Be precise and direct. No filler, no essays.\n"
                 "- Use short paragraphs or bullet points for clarity.\n"
                 "- State facts confidently when supported by context.\n"
-                "- If context is insufficient, state that clearly.\n"
+                "- If the context does not contain the answer, clearly state that the information is not available in the document.\n"
+                "- Do not use outside knowledge or make assumptions beyond the provided context.\n"
                 "- Keep a professional yet approachable tone.\n\n"
                 "CONTEXT:\n{context}\n\n"
                 "QUESTION: {question}\n\n"

@@ -1,4 +1,4 @@
-"""Retrieval augmented generation orchestration with hybrid web search."""
+"""Retrieval augmented generation orchestration with direct LLM fallback."""
 
 import time
 from collections import OrderedDict
@@ -9,7 +9,6 @@ from psk_bot.settings import AppSettings, settings
 
 from .ollama import OllamaService
 from .vector_store import VectorStoreService
-from .web_search import WebSearchService
 
 logger = get_logger(__name__)
 
@@ -57,7 +56,7 @@ class PromptBuilder:
             formatted.append(f"User: {user_msg}\nAssistant: {bot_msg}")
         return "\n---\n".join(formatted)
 
-    def _select_context(self, documents: List[Dict[str, object]], web_context: str = "") -> str:
+    def _select_context(self, documents: List[Dict[str, object]]) -> str:
         parts = []
 
         if documents:
@@ -79,24 +78,21 @@ class PromptBuilder:
             if doc_parts:
                 parts.append("FROM DOCUMENTS:\n" + "\n\n".join(doc_parts))
 
-        if web_context:
-            parts.append("FROM WEB:\n" + web_context)
-
         if not parts:
             return "No relevant information found."
 
         combined = "\n\n".join(parts)
         return self._truncate(combined, self._config.max_context_chars)
 
-    def build(self, query: str, documents: List[Dict[str, object]], history: List[Dict[str, str]], web_context: str = "") -> str:
-        context = self._select_context(documents, web_context)
+    def build(self, query: str, documents: List[Dict[str, object]], history: List[Dict[str, str]]) -> str:
+        context = self._select_context(documents)
         formatted_history = self._format_history(history)
         prompt = self._config.prompt_template.format(context=context, history=formatted_history, question=query)
         return prompt
 
 
 class RAGService:
-    """High level coordinator for retrieval augmented responses with hybrid web search."""
+    """High level coordinator for retrieval augmented responses with direct LLM fallback."""
 
     def __init__(
         self,
@@ -104,14 +100,12 @@ class RAGService:
         config: AppSettings = settings,
         vector_store: Optional[VectorStoreService] = None,
         llm: Optional[OllamaService] = None,
-        web_search: Optional[WebSearchService] = None,
         prompt_builder: Optional[PromptBuilder] = None,
         cache_size: int = 64,
     ) -> None:
         self._config = config
         self._vector_store = vector_store or VectorStoreService(config=config)
         self._llm = llm or OllamaService(config=config)
-        self._web_search = web_search or WebSearchService(config=config)
         self._prompt_builder = prompt_builder or PromptBuilder(config)
         self._ready = self._vector_store.ensure_ready()
         self._response_cache: OrderedDict[Tuple[str, Tuple[Tuple[str, str], ...]], str] = OrderedDict()
@@ -121,12 +115,8 @@ class RAGService:
 
     @property
     def ready(self) -> bool:
-        # Always ready now — we can fall back to web search
+        # Always ready — we fall back to direct LLM conversation
         return True
-
-    @property
-    def web_search(self) -> WebSearchService:
-        return self._web_search
 
     def _preprocess_query(self, query: str) -> str:
         tokens = [word for word in query.lower().split() if word not in _STOP_WORDS and len(word) > 2]
@@ -172,7 +162,7 @@ class RAGService:
             yield cached_response[start : start + chunk_size]
 
     def get_response_stream(self, query: str, history: Iterable[Dict[str, str]]) -> Generator[str, None, None]:
-        """Yield streamed response tokens — uses documents first, falls back to web search."""
+        """Yield streamed response tokens — uses documents first, falls back to direct LLM."""
         try:
             history_list = list(history)
             cleaned_query = query.strip()
@@ -190,32 +180,25 @@ class RAGService:
             if self._vector_store.ensure_ready():
                 documents = self._retrieve_documents(cleaned_query)
 
-            # Step 2: If documents are weak or missing, try web search
-            web_context = ""
+            # Step 2: Build prompt — use RAG context if available, otherwise direct LLM
             best_doc_score = 0.0
             if documents:
                 best_doc_score = float(documents[0].get("relevance", documents[0].get("similarity", 0.0)))
 
-            if (not documents or best_doc_score < 0.4) and self._web_search.enabled:
-                logger.info("Documents insufficient (score=%.3f), searching the web...", best_doc_score)
-                web_context = self._web_search.search_and_summarize(cleaned_query)
+            if documents and best_doc_score >= 0.25:
+                # Good document matches — use RAG prompt
+                prompt = self._prompt_builder.build(cleaned_query, documents, history_list)
+            else:
+                # No relevant documents — talk directly to LLM
+                logger.info("Documents insufficient (score=%.3f), using direct LLM conversation", best_doc_score)
+                prompt = cleaned_query
 
-            if not documents and not web_context:
-                fallback = (
-                    "I couldn't find relevant information for that query in the available documents or web sources. "
-                    "Could you try rephrasing, or ask about a different topic?"
-                )
-                self._cache_store(cache_key, fallback)
-                yield fallback
-                return
-
-            prompt = self._prompt_builder.build(cleaned_query, documents, history_list, web_context)
             retrieval_time = time.perf_counter() - start_time
             logger.info(
-                "Prompt prepared in %.2fs (docs=%d, web=%s, context chars=%d)",
+                "Prompt prepared in %.2fs (docs=%d, best_score=%.3f, context chars=%d)",
                 retrieval_time,
                 len(documents),
-                bool(web_context),
+                best_doc_score,
                 len(prompt),
             )
 

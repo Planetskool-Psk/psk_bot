@@ -41,7 +41,7 @@ class DocumentInfo:
 class DocumentManager:
     """Manages document storage, metadata, and lifecycle."""
     
-    SUPPORTED_EXTENSIONS = {'.pdf', '.txt', '.md', '.docx'}
+    SUPPORTED_EXTENSIONS = {'.pdf', '.txt', '.md', '.docx', '.png', '.jpg', '.jpeg', '.tiff', '.tif', '.bmp', '.webp'}
     MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
     
     def __init__(self, base_dir: Path = None):

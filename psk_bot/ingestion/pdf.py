@@ -4,7 +4,6 @@ from pathlib import Path
 from typing import List, Optional, Union
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from pypdf import PdfReader
 
 from psk_bot.logging import get_logger
 from psk_bot.settings import settings
@@ -13,15 +12,15 @@ logger = get_logger(__name__)
 
 
 def parse_pdf(file_path: Union[str, Path]) -> Optional[str]:
-    """Extract text from the provided PDF path."""
+    """Extract text from PDF — delegates to the OCR-capable parser in parsers.py."""
+    from psk_bot.ingestion.parsers import parse_pdf as _parse_pdf_ocr
+
     path = Path(file_path)
     logger.info("Parsing PDF: %s", path)
     try:
-        reader = PdfReader(str(path))
-        text = "".join(filter(None, (page.extract_text() for page in reader.pages)))
-        logger.info("Extracted %s characters from %s", len(text), path.name)
-        return text
-    except Exception:  # noqa: BLE001 - upstream library raises several exception types
+        text = _parse_pdf_ocr(path)
+        return text if text else None
+    except Exception:
         logger.exception("Failed to parse PDF %s", path)
         return None
 
