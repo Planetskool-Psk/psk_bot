@@ -73,19 +73,19 @@ class PromptBuilder:
                 seen_content.add(content_key)
                 content = " ".join(content.split())
                 score = float(doc.get("relevance", doc.get("similarity", doc.get("score", 0.0))))
-                if score < 0.2 and idx > 3:
+                if score < 0.25 and idx > 2:
                     continue
-                doc_parts.append(f"[Document Section {idx}]: {content}")
+                doc_parts.append(f"[{idx}] {content}")
             if doc_parts:
-                parts.append("📄 FROM YOUR DOCUMENTS:\n" + "\n\n".join(doc_parts))
+                parts.append("FROM DOCUMENTS:\n" + "\n\n".join(doc_parts))
 
         if web_context:
-            parts.append("🌐 FROM THE WEB:\n" + web_context)
+            parts.append("FROM WEB:\n" + web_context)
 
         if not parts:
-            return "No relevant information found from documents or web search."
+            return "No relevant information found."
 
-        combined = "\n\n---\n\n".join(parts)
+        combined = "\n\n".join(parts)
         return self._truncate(combined, self._config.max_context_chars)
 
     def build(self, query: str, documents: List[Dict[str, object]], history: List[Dict[str, str]], web_context: str = "") -> str:
@@ -106,7 +106,7 @@ class RAGService:
         llm: Optional[OllamaService] = None,
         web_search: Optional[WebSearchService] = None,
         prompt_builder: Optional[PromptBuilder] = None,
-        cache_size: int = 16,
+        cache_size: int = 64,
     ) -> None:
         self._config = config
         self._vector_store = vector_store or VectorStoreService(config=config)
@@ -137,9 +137,13 @@ class RAGService:
         return enhanced
 
     def _cache_key(self, query: str, history: List[Dict[str, str]]) -> Tuple[str, Tuple[Tuple[str, str], ...]]:
+        # Normalize query for better cache hit rate
+        import re
+        normalised = re.sub(r'[^a-z0-9\s]', '', query.strip().lower())
+        normalised = ' '.join(normalised.split())  # collapse whitespace
         trimmed_history = history[-self._config.prompt_history_turns :]
         history_signature = tuple((turn.get("user", ""), turn.get("bot", "")) for turn in trimmed_history)
-        return (query.strip().lower(), history_signature)
+        return (normalised, history_signature)
 
     def _cache_lookup(self, key: Tuple[str, Tuple[Tuple[str, str], ...]]) -> Optional[str]:
         if key in self._response_cache:
@@ -162,7 +166,8 @@ class RAGService:
         return candidates
 
     def _yield_cached(self, cached_response: str) -> Generator[str, None, None]:
-        chunk_size = 120
+        # Yield in larger chunks for faster cached delivery
+        chunk_size = 200
         for start in range(0, len(cached_response), chunk_size):
             yield cached_response[start : start + chunk_size]
 
@@ -197,8 +202,8 @@ class RAGService:
 
             if not documents and not web_context:
                 fallback = (
-                    "Hmm, I couldn't find anything specific about that from my documents or the web. 🤔 "
-                    "Could you try rephrasing your question? Or if you'd like, I can help with something else!"
+                    "I couldn't find relevant information for that query in the available documents or web sources. "
+                    "Could you try rephrasing, or ask about a different topic?"
                 )
                 self._cache_store(cache_key, fallback)
                 yield fallback
@@ -234,6 +239,6 @@ class RAGService:
         except Exception:  # noqa: BLE001
             logger.exception("Unexpected error during RAG pipeline")
             yield (
-                "Oops! Something went wrong on my end. 😅 "
-                "Please try again in a moment, or rephrase your question!"
+                "An error occurred while processing your request. "
+                "Please try again or rephrase your question."
             )

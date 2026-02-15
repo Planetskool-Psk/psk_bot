@@ -36,20 +36,20 @@ class AppSettings:
         self.chunk_size: int = int(os.getenv("CHUNK_SIZE", 512))
         self.chunk_overlap: int = int(os.getenv("CHUNK_OVERLAP", 100))
         self.top_k_results: int = int(os.getenv("TOP_K_RESULTS", 5))
-        self.max_context_documents: int = int(os.getenv("CONTEXT_DOCUMENTS", 5))
-        self.max_context_chars: int = int(os.getenv("CONTEXT_CHAR_LIMIT", 4000))
+        self.max_context_documents: int = int(os.getenv("CONTEXT_DOCUMENTS", 4))
+        self.max_context_chars: int = int(os.getenv("CONTEXT_CHAR_LIMIT", 3000))
 
         self.ollama_base_url: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
         self.ollama_model: str = os.getenv("OLLAMA_MODEL", "gemma3:1b")
         self.ollama_keep_alive: str = os.getenv("OLLAMA_KEEP_ALIVE", "30m")
-        self.llm_timeout: int = int(os.getenv("LLM_TIMEOUT", 120))
+        self.llm_timeout: int = int(os.getenv("LLM_TIMEOUT", 90))
         self.llm_num_predict: int = int(os.getenv("LLM_NUM_PREDICT", 384))
         self.llm_num_ctx: int = int(os.getenv("LLM_NUM_CTX", 2048))
-        self.llm_num_thread: int = int(os.getenv("LLM_NUM_THREAD", 2))
-        self.llm_num_batch: int = int(os.getenv("LLM_NUM_BATCH", 256))
-        self.llm_temperature: float = float(os.getenv("LLM_TEMPERATURE", 0.4))
-        self.llm_top_p: float = float(os.getenv("LLM_TOP_P", 0.85))
-        self.llm_top_k: int = int(os.getenv("LLM_TOP_K", 30))
+        self.llm_num_thread: int = int(os.getenv("LLM_NUM_THREAD", 0))  # 0 = Ollama auto-detects
+        self.llm_num_batch: int = int(os.getenv("LLM_NUM_BATCH", 512))
+        self.llm_temperature: float = float(os.getenv("LLM_TEMPERATURE", 0.2))
+        self.llm_top_p: float = float(os.getenv("LLM_TOP_P", 0.8))
+        self.llm_top_k: int = int(os.getenv("LLM_TOP_K", 20))
 
         self.max_conversation_history: int = int(os.getenv("MAX_CONVERSATION_HISTORY", 6))
         self.prompt_history_turns: int = int(os.getenv("PROMPT_HISTORY_TURNS", 3))
@@ -68,23 +68,16 @@ class AppSettings:
         self.prompt_template: str = os.getenv(
             "PROMPT_TEMPLATE",
             (
-                "You are PSK Bot — a friendly, smart, and cheerful AI assistant. "
-                "You love helping people and always respond with warmth and enthusiasm! 🎉\n\n"
-                "=== HOW YOU WORK ===\n"
-                "1. If DOCUMENT CONTENT is provided below, use it as your PRIMARY source of information\n"
-                "2. If WEB SEARCH RESULTS are provided, use them to supplement or answer the question\n"
-                "3. You CAN use your general knowledge for casual conversation, greetings, jokes, and common sense questions\n"
-                "4. When using document or web content, be accurate — don't make up facts\n"
-                "5. For complex/specific questions with no context available, let the user know you couldn't find details and suggest they try rephrasing\n\n"
-                "=== YOUR PERSONALITY ===\n"
-                "- Friendly, warm, and approachable — like chatting with a smart friend\n"
-                "- Use casual, conversational language (not robotic)\n"
-                "- Add relevant emojis occasionally to keep things fun\n"
-                "- Keep answers clear, concise, and well-structured\n"
-                "- If you're not sure about something, say so honestly\n\n"
-                "=== CONTEXT ===\n{context}\n=== END CONTEXT ===\n\n"
-                "Question: {question}\n\n"
-                "Respond naturally and helpfully:"
+                "You are a professional assistant. Answer the QUESTION using only the CONTEXT below.\n"
+                "Rules:\n"
+                "- Be precise and direct. No filler, no essays.\n"
+                "- Use short paragraphs or bullet points for clarity.\n"
+                "- State facts confidently when supported by context.\n"
+                "- If context is insufficient, state that clearly.\n"
+                "- Keep a professional yet approachable tone.\n\n"
+                "CONTEXT:\n{context}\n\n"
+                "QUESTION: {question}\n\n"
+                "ANSWER:"
             ),
         )
 
@@ -93,17 +86,20 @@ class AppSettings:
     @property
     def ollama_options(self) -> Dict[str, Any]:
         """Return generation options tuned for fast streaming."""
-        return {
+        opts: Dict[str, Any] = {
             "temperature": self.llm_temperature,
             "top_p": self.llm_top_p,
             "top_k": self.llm_top_k,
             "num_ctx": self.llm_num_ctx,
             "num_predict": self.llm_num_predict,
-            "num_thread": self.llm_num_thread,
             "num_batch": self.llm_num_batch,
             "repeat_penalty": 1.1,
             "repeat_last_n": 64,
         }
+        # Only set num_thread if explicitly configured (0 = let Ollama auto-detect)
+        if self.llm_num_thread > 0:
+            opts["num_thread"] = self.llm_num_thread
+        return opts
 
     def as_dict(self) -> Dict[str, Any]:
         """Return a serialisable view of the configuration."""

@@ -18,7 +18,7 @@ class WebSearchService:
         self._config = config
         self._enabled = config.web_search_enabled
         self._max_results = config.web_search_max_results
-        self._timeout = config.web_search_timeout
+        self._timeout = min(config.web_search_timeout, 8)  # Cap at 8s
         self._session = None
 
     def _get_session(self):
@@ -165,7 +165,10 @@ class WebSearchService:
             return None
 
     def search_and_summarize(self, query: str) -> str:
-        """Search the web and return a formatted context string for the LLM."""
+        """Search the web and return a formatted context string for the LLM.
+        
+        Only scrapes the first URL (if any) for speed, uses snippets for the rest.
+        """
         results = self.search(query)
         if not results:
             return ""
@@ -174,9 +177,9 @@ class WebSearchService:
         for i, result in enumerate(results, 1):
             part = f"[Web Source {i}]: {result['title']}\n{result['snippet']}"
 
-            # Try to scrape additional content from the URL
-            if result.get("url"):
-                scraped = self.scrape_url(result["url"], max_chars=1500)
+            # Only scrape the first URL for detailed content — skip the rest for speed
+            if i == 1 and result.get("url"):
+                scraped = self.scrape_url(result["url"], max_chars=1000)
                 if scraped:
                     part += f"\n\nDetailed content:\n{scraped}"
 

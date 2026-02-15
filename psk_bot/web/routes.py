@@ -62,7 +62,7 @@ def healthcheck():
                 "status": "ok" if status_code == 200 else "degraded",
                 "rag_ready": rag_ready,
                 "vector_store_ready": vector_ready,
-                "model": services.llm._model if services else None,  # noqa: SLF001 - simple telemetry
+                "model": services.llm.model if services else None,
             }
         ),
         status_code,
@@ -155,27 +155,18 @@ def api_stream_prepared():
     if not services:
         return jsonify({"error": "Service unavailable."}), 503
 
-    # Use the LLM service's client for the actual Ollama call
+    # Use the LLM service's public API
     llm = services.llm
-    if not llm._client:
+    if not llm.client:
         return jsonify({"error": "Ollama is not available."}), 503
 
-    target_model = model or llm._model
+    target_model = model or llm.model
     merged_options = {**llm._options, **options}
 
     def generate():
         try:
-            stream = llm._client.chat(
-                model=target_model,
-                messages=messages,
-                stream=True,
-                options=merged_options,
-                keep_alive=llm._keep_alive,
-            )
-            for chunk in stream:
-                content = chunk.get("message", {}).get("content")
-                if content:
-                    yield f"data: {json.dumps({'token': content, 'type': 'token'})}\n\n"
+            for token in llm.stream_chat(messages, options_override=options):
+                yield f"data: {json.dumps({'token': token, 'type': 'token'})}\n\n"
             yield f"data: {json.dumps({'type': 'done'})}\n\n"
         except Exception as e:
             current_app.logger.exception("Error in stream_prepared")
@@ -203,16 +194,15 @@ GREETING_PATTERNS = [
 ]
 
 GREETING_RESPONSES = [
-    "Hey there! 👋 I'm PSK Bot, your friendly AI assistant. What can I help you with today?",
-    "Hi! 😊 Great to see you! I can help with your documents or search the web for answers. What's on your mind?",
-    "Hello! 🎉 I'm here and ready to help! Ask me anything — from your uploaded docs to general questions!",
-    "Hey! 👋 I'm PSK Bot. I can dig through your documents or search online to find what you need. Fire away!",
+    "Hello! I'm PSK Bot. How can I assist you today?",
+    "Hi there. I'm ready to help — feel free to ask your question.",
+    "Welcome! Let me know what you'd like to know.",
 ]
 
 THANK_RESPONSES = [
-    "You're welcome! 😊 Let me know if you need anything else!",
-    "Happy to help! 🎉 Don't hesitate to ask if you have more questions!",
-    "Anytime! 👍 I'm here whenever you need me!",
+    "You're welcome. Let me know if there's anything else.",
+    "Glad I could help. Feel free to ask anytime.",
+    "Happy to assist. I'm here if you need anything else.",
 ]
 
 def is_greeting(text: str) -> bool:
@@ -293,7 +283,7 @@ def api_prepare():
         return jsonify({
             "is_greeting": True,
             "response": resp,
-            "model": services.llm._model,
+            "model": services.llm.model,
         })
 
     # Get RAG context and build prompt
@@ -342,22 +332,16 @@ def api_prepare():
     history_messages = []
     
     # Add system message for consistent behavior
-    system_message = """You are PSK Bot — a friendly, cheerful, and knowledgeable AI assistant! 🤖✨
-
-YOUR PERSONALITY:
-- Warm, fun, and approachable — like chatting with a smart friend
-- Use casual, conversational language with occasional emojis
-- Be enthusiastic and encouraging
-- Keep answers clear, well-structured, and easy to understand
-
-HOW YOU WORK:
-- Answer questions using the context provided (documents and/or web results)
-- For casual conversation, greetings, or general knowledge, use your own abilities
-- Be accurate with facts from provided context — never make things up
-- If you don't have enough info, say so honestly and suggest alternatives
-- Use context from previous messages for follow-up questions
-- NEVER reference document structure (no "Section X" or "Page Y")
-- Rephrase information naturally while keeping all facts accurate"""
+    system_message = (
+        "You are PSK Bot, a professional AI assistant.\n"
+        "Guidelines:\n"
+        "- Answer strictly from the provided context. Do not fabricate information.\n"
+        "- Be precise and to the point. Avoid long paragraphs — use bullet points or short statements.\n"
+        "- Maintain a professional, clear tone. No excessive emojis or filler language.\n"
+        "- Never reference document internals (no 'Section X', 'Page Y', 'Document 1').\n"
+        "- For follow-up questions, use conversation history for continuity.\n"
+        "- If the context doesn't contain the answer, say so directly."
+    )
     
     history_messages.append({
         "role": "system",
@@ -385,7 +369,7 @@ HOW YOU WORK:
         "prompt": current_prompt,
         "has_context": bool(documents),
         "has_web_context": bool(web_context),
-        "model": services.llm._model,
+        "model": services.llm.model,
         "options": rag._config.ollama_options,
         "history_messages": history_messages,
         "document_id": document_id
@@ -417,7 +401,7 @@ def api_prepare_free():
         return jsonify({
             "is_greeting": True,
             "response": resp,
-            "model": services.llm._model,
+            "model": services.llm.model,
         })
 
     # Search the web for context
@@ -432,18 +416,15 @@ def api_prepare_free():
     else:
         current_prompt = question
 
-    system_message = """You are PSK Bot — a friendly, cheerful, and knowledgeable AI assistant! 🤖✨
-
-YOUR PERSONALITY:
-- Warm, fun, and approachable — like chatting with a smart friend
-- Use casual, conversational language with occasional emojis
-- Be enthusiastic and encouraging
-
-HOW YOU WORK:
-- Answer questions using web search results if provided, or your general knowledge
-- Be accurate — if web results are provided, use them for factual answers
-- For casual chat, be natural and engaging
-- If you're unsure, say so honestly"""
+    system_message = (
+        "You are PSK Bot, a professional AI assistant.\n"
+        "Guidelines:\n"
+        "- Use web search results if provided; otherwise use your general knowledge.\n"
+        "- Be precise and direct. Avoid filler or essay-length responses.\n"
+        "- Use bullet points or numbered lists when presenting multiple items.\n"
+        "- Maintain a professional, clear tone throughout.\n"
+        "- If you're uncertain about something, state it clearly."
+    )
 
     history_messages = [{"role": "system", "content": system_message}]
 
@@ -459,7 +440,7 @@ HOW YOU WORK:
         "prompt": current_prompt,
         "has_context": False,
         "has_web_context": bool(web_context),
-        "model": services.llm._model,
+        "model": services.llm.model,
         "options": rag._config.ollama_options,
         "history_messages": history_messages,
     })
@@ -683,7 +664,7 @@ def robot_health():
     rag_ready = bool(services and services.rag_service.ready)
     return jsonify({
         "status": "ok" if rag_ready else "degraded",
-        "model": services.llm._model if services else None,
+        "model": services.llm.model if services else None,
         "timestamp": time.time(),
     }), 200 if rag_ready else 503
 

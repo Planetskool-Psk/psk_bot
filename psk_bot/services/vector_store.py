@@ -35,7 +35,7 @@ class VectorStoreService:
         self._documents: Optional[List[str]] = None
         self._metric: str = "ip"
         self._query_cache: OrderedDict[str, np.ndarray] = OrderedDict()
-        self._cache_limit = 32
+        self._cache_limit = 64
 
         # Set paths based on doc_id
         base_path = Path(self._config.vector_store_dir).parent
@@ -230,7 +230,7 @@ class VectorStoreService:
 
         target_k = k or self._config.top_k_results
         query_embedding = self._get_query_embedding(query)
-        search_k = min(target_k * 3, len(self._documents)) or target_k
+        search_k = min(target_k * 2, len(self._documents)) or target_k
         distances, indices = self._index.search(query_embedding, search_k)
 
         results: List[Dict[str, Any]] = []
@@ -262,7 +262,7 @@ class VectorStoreService:
             )
 
         results.sort(key=lambda item: item["relevance"], reverse=True)
-        filtered = [item for item in results if item["similarity"] > 0.3]
+        filtered = [item for item in results if item["similarity"] > 0.35]
         final = (filtered or results)[:target_k]
 
         if final:

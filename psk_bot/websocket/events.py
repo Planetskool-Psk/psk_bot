@@ -43,7 +43,7 @@ def _process_message(session_id: str, message: str, lock: Lock, rag_service, sto
         logger.exception("Unhandled error during chat message handling")
         socketio.emit(
             "stream_response",
-            {"token": "Oops! Something went wrong on my end. Please try again! 😅"},
+            {"token": "An error occurred while processing your request. Please try again."},
             to=session_id,
         )
     else:

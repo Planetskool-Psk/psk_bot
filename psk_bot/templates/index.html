@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>PSK Bot - Your Friendly AI Assistant</title>
+  <title>PSK Bot - AI Assistant</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -520,7 +520,7 @@
       <div class="header-avatar">&#x1F916;</div>
       <div class="header-content">
         <div class="header-title">PSK Bot</div>
-        <div class="header-subtitle">Your Friendly AI Assistant</div>
+        <div class="header-subtitle">AI-Powered Assistant</div>
       </div>
       <div class="header-right">
         <div class="mode-toggle">
@@ -544,16 +544,16 @@
     </div>
     <div id="chat-window">
       <div class="welcome-message">
-        <div class="welcome-icon">&#x1F44B;</div>
-        <div class="welcome-title">Hey there! I'm PSK Bot</div>
+        <div class="welcome-icon">&#x1F916;</div>
+        <div class="welcome-title">Welcome to PSK Bot</div>
         <div class="welcome-text">
-          I can help with your documents, search the web, or just have a friendly chat!
-          Ask me anything &#x2014; I'm here to help. &#x1F389;
+          I can help you find information from your documents, search the web, or answer general questions.
+          How can I assist you today?
         </div>
         <div class="quick-actions">
-          <button class="quick-action" data-msg="What can you do?">&#x1F914; What can you do?</button>
-          <button class="quick-action" data-msg="Tell me a fun fact">&#x1F3B2; Fun fact</button>
-          <button class="quick-action" data-msg="What's the latest tech news?">&#x1F4F0; Tech news</button>
+          <button class="quick-action" data-msg="What can you do?">What can you do?</button>
+          <button class="quick-action" data-msg="Tell me a fun fact">Fun fact</button>
+          <button class="quick-action" data-msg="What's the latest tech news?">Tech news</button>
         </div>
       </div>
     </div>
@@ -589,8 +589,7 @@
       let welcomeRemoved = false;
       let isStreaming = false;
       let rawTextBuffer = '';
-      let displayedLength = 0;
-      let isTyping = false;
+      let renderPending = false;
 
       let chatMode = 'free';
       let conversationHistory = [];
@@ -630,13 +629,13 @@
 
       function showFreeWelcome() {
         chatWindow.innerHTML = '<div class="welcome-message">' +
-          '<div class="welcome-icon">\uD83D\uDC4B</div>' +
-          '<div class="welcome-title">Hey there! I\'m PSK Bot</div>' +
-          '<div class="welcome-text">I can search the web, answer questions, or just have a friendly chat! Ask me anything \u2014 I\'m here to help. \uD83C\uDF89</div>' +
+          '<div class="welcome-icon">\uD83E\uDD16</div>' +
+          '<div class="welcome-title">Welcome to PSK Bot</div>' +
+          '<div class="welcome-text">I can search the web, answer questions, or help with documents. How can I assist you?</div>' +
           '<div class="quick-actions">' +
-          '<button class="quick-action" data-msg="What can you do?">\uD83E\uDD14 What can you do?</button>' +
-          '<button class="quick-action" data-msg="Tell me a fun fact">\uD83C\uDFB2 Fun fact</button>' +
-          '<button class="quick-action" data-msg="What\'s the latest tech news?">\uD83D\uDCF0 Tech news</button>' +
+          '<button class="quick-action" data-msg="What can you do?">What can you do?</button>' +
+          '<button class="quick-action" data-msg="Tell me a fun fact">Fun fact</button>' +
+          '<button class="quick-action" data-msg="What\'s the latest tech news?">Tech news</button>' +
           '</div></div>';
         attachQuickActions();
       }
@@ -644,8 +643,8 @@
       function showDocWelcome() {
         chatWindow.innerHTML = '<div class="welcome-message">' +
           '<div class="welcome-icon">\uD83D\uDCC4</div>' +
-          '<div class="welcome-title">Document Chat Mode</div>' +
-          '<div class="welcome-text">Select a document from the dropdown above to start asking questions about it!</div>' +
+          '<div class="welcome-title">Document Chat</div>' +
+          '<div class="welcome-text">Select a document from the dropdown above to begin.</div>' +
           '</div>';
       }
 
@@ -697,21 +696,18 @@
         return html;
       }
 
-      async function typeCharacters() {
-        if (isTyping) return;
-        isTyping = true;
-        while (displayedLength < rawTextBuffer.length) {
+      async function renderBuffer() {
+        // Render the full buffer immediately — no per-character delay
+        if (renderPending) return;
+        renderPending = true;
+        requestAnimationFrame(() => {
           if (currentBotMessageElement) {
-            displayedLength++;
-            currentBotMessageElement.innerHTML = formatPartialText(rawTextBuffer.slice(0, displayedLength));
+            currentBotMessageElement.innerHTML = formatPartialText(rawTextBuffer);
             if (cursorElement) currentBotMessageElement.appendChild(cursorElement);
             scrollToBottom();
-            const char = rawTextBuffer[displayedLength - 1];
-            const delay = char === ' ' ? 2 : (char === '.' || char === ',' || char === '\n' ? 15 : 5);
-            await new Promise(r => setTimeout(r, delay));
-          } else break;
-        }
-        isTyping = false;
+          }
+          renderPending = false;
+        });
       }
 
       async function checkHealth() {
@@ -828,7 +824,6 @@
         isStreaming = true;
         sendButton.disabled = true;
         rawTextBuffer = '';
-        displayedLength = 0;
 
         const isDocMode = chatMode === 'doc';
         const selectedDocId = isDocMode ? docSelector.value : null;
@@ -868,8 +863,8 @@
 
           if (prepData.is_greeting) {
             rawTextBuffer = prepData.response;
-            typeCharacters();
-            while (displayedLength < rawTextBuffer.length || isTyping) await new Promise(r => setTimeout(r, 20));
+            renderBuffer();
+            await new Promise(r => requestAnimationFrame(r));
             conversationHistory.push({ role: 'assistant', content: rawTextBuffer, document_id: activeDocumentId });
             removeCursor();
             if (currentBotMessageContainer) currentBotMessageContainer.classList.remove('streaming');
@@ -900,14 +895,14 @@
                   const evt = JSON.parse(payload);
                   if (evt.type === 'token' && evt.token) {
                     rawTextBuffer += evt.token;
-                    typeCharacters();
+                    renderBuffer();
                   }
                   if (evt.type === 'done' || evt.type === 'error') break;
                 } catch (e) { /* skip non-JSON SSE lines */ }
               }
             }
 
-            while (displayedLength < rawTextBuffer.length || isTyping) await new Promise(r => setTimeout(r, 20));
+            await new Promise(r => requestAnimationFrame(r));
 
             if (has_web_context && currentBotMessageContainer) {
               const badge = document.createElement('div');
@@ -924,7 +919,7 @@
         } catch (error) {
           console.error("Stream error:", error);
           if (loaderElement) { loaderElement.remove(); loaderElement = null; }
-          if (currentBotMessageElement) currentBotMessageElement.textContent = "Oops! Something went wrong. Please try again. \uD83D\uDE05";
+          if (currentBotMessageElement) currentBotMessageElement.textContent = "Something went wrong. Please try again.";
           if (conversationHistory.length > 0 && conversationHistory[conversationHistory.length - 1].role === 'user') conversationHistory.pop();
         } finally {
           removeCursor();
