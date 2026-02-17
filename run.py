@@ -1,15 +1,29 @@
 #!/usr/bin/env python3
-"""Application entrypoint optimized for 2-core/12GB AMD Milan VM deployment."""
+"""Cross-platform application entrypoint for PSK Bot.
+
+Works on Windows, macOS, and Linux.
+- Unix production: gunicorn + gevent
+- Windows production: waitress
+- Development: Flask built-in server (all platforms)
+"""
 
 import gc
 import os
+import platform
+import sys
 import warnings
 
 # Suppress Pydantic V1 compatibility warning for Python 3.14+
 warnings.filterwarnings("ignore", message="Core Pydantic V1 functionality isn't compatible")
 
-from gevent import monkey
-monkey.patch_all()
+# gevent monkey-patching is only needed (and only works reliably) on Unix
+_IS_WINDOWS = sys.platform == "win32"
+if not _IS_WINDOWS:
+    try:
+        from gevent import monkey
+        monkey.patch_all()
+    except ImportError:
+        pass  # gevent not installed — Flask dev server will be used
 
 import threading
 import time
@@ -17,16 +31,22 @@ from typing import NoReturn
 
 import psutil
 
-# ─── CPU/Memory tuning for 2-core AMD Milan VM ────────────────────────
-os.environ.setdefault("OMP_NUM_THREADS", "2")
-os.environ.setdefault("MKL_NUM_THREADS", "2")
-os.environ.setdefault("NUMEXPR_NUM_THREADS", "2")
-os.environ.setdefault("OPENBLAS_NUM_THREADS", "2")
-os.environ.setdefault("VECLIB_MAXIMUM_THREADS", "2")
+# ─── CPU/Memory tuning (cross-platform) ───────────────────────────────
+_cpu = os.cpu_count() or 2
+_threads = str(max(min(_cpu, 4), 1))  # cap at 4 threads, minimum 1
+
+os.environ.setdefault("OMP_NUM_THREADS", _threads)
+os.environ.setdefault("MKL_NUM_THREADS", _threads)
+os.environ.setdefault("NUMEXPR_NUM_THREADS", _threads)
+os.environ.setdefault("OPENBLAS_NUM_THREADS", _threads)
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
-# FAISS optimizations for small core count
+
+# macOS-only: Apple vecLib BLAS setting
+if platform.system() == "Darwin":
+    os.environ.setdefault("VECLIB_MAXIMUM_THREADS", _threads)
+
+# FAISS optimizations
 os.environ.setdefault("FAISS_DISABLE_GPU", "1")
-os.environ.setdefault("FAISS_OPT_LEVEL", "avx2")  # AMD Milan supports AVX2
 
 from psk_bot import create_app
 from psk_bot.logging import get_logger
@@ -70,11 +90,21 @@ def main() -> None:
     )
 
     if optimized:
-        logger.info("Optimized mode ON — tuned for 2-core/12GB VM")
+        logger.info("Optimized mode ON")
         # Pre-warm: force garbage collection before serving
         gc.collect()
 
-    app.run(host="0.0.0.0", port=port, debug=debug)
+    if _IS_WINDOWS:
+        # gunicorn is Unix-only; use waitress on Windows
+        try:
+            from waitress import serve
+            logger.info("Starting with Waitress (Windows production server)")
+            serve(app, host="0.0.0.0", port=port)
+        except ImportError:
+            logger.warning("waitress not installed — falling back to Flask dev server")
+            app.run(host="0.0.0.0", port=port, debug=debug)
+    else:
+        app.run(host="0.0.0.0", port=port, debug=debug)
 
 
 if __name__ == "__main__":

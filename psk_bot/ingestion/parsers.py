@@ -231,7 +231,9 @@ def parse_image(file_path: Path) -> str:
     if not _ocr_available():
         raise RuntimeError(
             "Tesseract OCR is required for image files. "
-            "Install: brew install tesseract (macOS) / apt install tesseract-ocr (Linux)"
+            "Install: brew install tesseract (macOS) / "
+            "apt install tesseract-ocr (Linux) / "
+            "choco install tesseract (Windows)"
         )
 
     from PIL import Image
