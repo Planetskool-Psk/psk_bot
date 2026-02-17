@@ -198,3 +198,60 @@ def list_ready_documents():
             for doc in documents
         ]
     })
+
+
+@admin_bp.post("/api/documents/bulk")
+@require_admin
+def bulk_upload_documents():
+    """Upload multiple documents at once (folder upload).
+    
+    Accepts multiple files via multipart form data.
+    Each file is created as a separate document and ingested in the background.
+    """
+    files = request.files.getlist("files")
+    if not files or all(not f.filename for f in files):
+        return jsonify({"error": "No files provided"}), 400
+
+    name_prefix = request.form.get("name_prefix", "").strip()
+    doc_manager = get_document_manager()
+    ingestion_worker = get_ingestion_worker()
+
+    results = {"uploaded": [], "skipped": [], "total": 0}
+
+    for file in files:
+        if not file.filename:
+            continue
+
+        results["total"] += 1
+        file_content = file.read()
+
+        valid, error_msg = doc_manager.validate_file(file.filename, len(file_content))
+        if not valid:
+            results["skipped"].append({"filename": file.filename, "reason": error_msg})
+            continue
+
+        try:
+            from pathlib import Path
+            stem = Path(file.filename).stem.replace("_", " ").replace("-", " ").title()
+            display_name = f"{name_prefix}{stem}" if name_prefix else None
+
+            doc_info = doc_manager.create_document(
+                filename=file.filename,
+                file_content=file_content,
+                display_name=display_name,
+            )
+            ingestion_worker.ingest_document(doc_info.id)
+            results["uploaded"].append({"id": doc_info.id, "filename": file.filename})
+
+        except Exception as e:
+            logger.error("Bulk upload failed for %s: %s", file.filename, e)
+            results["skipped"].append({"filename": file.filename, "reason": str(e)})
+
+    logger.info("Bulk upload: %d uploaded, %d skipped out of %d",
+                len(results["uploaded"]), len(results["skipped"]), results["total"])
+
+    return jsonify({
+        "success": True,
+        "message": f"{len(results['uploaded'])} file(s) uploaded, {len(results['skipped'])} skipped.",
+        **results,
+    }), 201

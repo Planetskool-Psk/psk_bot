@@ -28,17 +28,38 @@ def parse_pdf(file_path: Union[str, Path]) -> Optional[str]:
 def chunk_text(text: str, chunk_size: int = None, overlap: int = None) -> List[str]:
     """Split text into semantically meaningful chunks.
     
+    Uses hierarchical separators to preserve natural text boundaries:
+    sections → paragraphs → sentences → words.
+    
     Args:
         text: The text to chunk
         chunk_size: Size of each chunk (defaults to settings.chunk_size)
         overlap: Overlap between chunks (defaults to settings.chunk_overlap)
     """
+    effective_chunk = chunk_size or settings.chunk_size
+    effective_overlap = overlap or settings.chunk_overlap
+    
     splitter = RecursiveCharacterTextSplitter(
-        chunk_size=chunk_size or settings.chunk_size,
-        chunk_overlap=overlap or settings.chunk_overlap,
+        chunk_size=effective_chunk,
+        chunk_overlap=effective_overlap,
         length_function=len,
-        separators=["\n\n", "\n", ".", " ", ""],
+        separators=[
+            "\n\n\n",   # major sections
+            "\n\n",      # paragraphs
+            "\n",        # lines
+            ". ",        # sentences
+            "; ",        # clauses
+            ", ",        # phrases
+            " ",         # words
+            "",          # characters (last resort)
+        ],
     )
     chunks = splitter.split_text(text)
-    logger.info("Split text into %s chunks", len(chunks))
-    return chunks
+    
+    # Filter out very short chunks that add noise
+    min_chunk_len = 80
+    filtered = [c for c in chunks if len(c.strip()) >= min_chunk_len]
+    
+    logger.info("Split text into %d chunks (%d dropped as too short)",
+                len(filtered), len(chunks) - len(filtered))
+    return filtered

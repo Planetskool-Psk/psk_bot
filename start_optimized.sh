@@ -1,7 +1,7 @@
 #!/bin/bash
-# Optimized startup script for 2-core, 8GB RAM VM
+# Optimized startup script for 2-core Linux VM deployment
 
-echo "🚀 Starting optimized chatbot for 2-core, 8GB RAM VM..."
+echo "🚀 Starting optimized chatbot for 2-core Linux VM..."
 
 # Activate virtual environment if it exists
 if [ -d "venv" ]; then
@@ -22,16 +22,13 @@ export PYTHONUNBUFFERED=1
 # Enable optimized mode
 export OPTIMIZED_MODE=true
 
-# Threading optimizations for 2 cores (set to 1 for extra stability on Macs)
-export OMP_NUM_THREADS=${OMP_NUM_THREADS:-1}
-export MKL_NUM_THREADS=${MKL_NUM_THREADS:-1}
-export NUMEXPR_NUM_THREADS=${NUMEXPR_NUM_THREADS:-1}
-export OPENBLAS_NUM_THREADS=${OPENBLAS_NUM_THREADS:-1}
-export VECLIB_MAXIMUM_THREADS=${VECLIB_MAXIMUM_THREADS:-1}
+# Threading optimizations for 2 cores
+export OMP_NUM_THREADS=${OMP_NUM_THREADS:-2}
+export MKL_NUM_THREADS=${MKL_NUM_THREADS:-2}
+export NUMEXPR_NUM_THREADS=${NUMEXPR_NUM_THREADS:-2}
+export OPENBLAS_NUM_THREADS=${OPENBLAS_NUM_THREADS:-2}
 export TOKENIZERS_PARALLELISM=false
 export FAISS_DISABLE_GPU=1
-export PYTORCH_ENABLE_MPS_FALLBACK=1
-export KMP_DUPLICATE_LIB_OK=TRUE
 
 # Portable memory check (macOS/Linux)
 MEM_INFO=$(python - <<'PY'

@@ -13,11 +13,21 @@ os.environ.setdefault("FAISS_DISABLE_GPU", "1")
 
 import faiss
 import numpy as np
-from sentence_transformers import SentenceTransformer
 
 from psk_bot.logging import get_logger
 from psk_bot.services.ollama_embeddings import OllamaEmbeddings
 from psk_bot.settings import AppSettings, settings
+
+# Lazy import — SentenceTransformer requires torch which is broken on Python 3.14.
+# Only needed when NOT using Ollama embeddings.
+SentenceTransformer = None  # type: ignore
+
+def _get_sentence_transformer_class():
+    global SentenceTransformer
+    if SentenceTransformer is None:
+        from sentence_transformers import SentenceTransformer as _ST
+        SentenceTransformer = _ST
+    return SentenceTransformer
 
 logger = get_logger(__name__)
 
@@ -78,7 +88,8 @@ class VectorStoreService:
                     torch.set_num_threads(1)
                     torch.set_num_interop_threads(1)
                     
-                    self._embedding_model = SentenceTransformer(
+                    _ST = _get_sentence_transformer_class()
+                    self._embedding_model = _ST(
                         self._config.embedding_model_name,
                         device="cpu",
                         trust_remote_code=True,

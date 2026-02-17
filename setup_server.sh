@@ -158,7 +158,17 @@ apt-get install -y -qq \
     curl wget git build-essential \
     ufw logrotate rsync \
     jq htop unzip zstd \
+    tesseract-ocr tesseract-ocr-eng \
+    libgl1 libglib2.0-0 \
     2>&1 | tail -1
+
+# Verify Tesseract is working
+if command -v tesseract &>/dev/null; then
+    TESS_VERSION=$(tesseract --version 2>&1 | head -1)
+    success "Tesseract OCR installed (${TESS_VERSION})"
+else
+    warn "Tesseract OCR not found — OCR features will be disabled"
+fi
 
 success "System packages installed"
 
@@ -346,7 +356,10 @@ success "Virtual environment ready (${PYTHON_VERSION_FULL})"
 
 # Verify critical imports
 "${VENV_DIR}/bin/python3" -c "
-import flask, flask_socketio, flask_cors, ollama, faiss, sentence_transformers
+import flask, flask_cors, ollama, faiss
+import fitz         # PyMuPDF
+import pytesseract  # Tesseract OCR bindings
+import PIL          # Pillow for image preprocessing
 print('All critical packages verified')
 " 2>&1 | while read -r line; do info "$line"; done
 
@@ -405,10 +418,13 @@ CONTEXT_CHAR_LIMIT=3000
 MAX_CONVERSATION_HISTORY=6
 PROMPT_HISTORY_TURNS=3
 
-# ─── Web Search ─────────────────────────────────────────────
-WEB_SEARCH_ENABLED=true
-WEB_SEARCH_MAX_RESULTS=3
-WEB_SEARCH_TIMEOUT=8
+# ─── Text-to-Speech (ElevenLabs) ────────────────────────────
+# Get a free API key at https://elevenlabs.io
+# Leave blank to disable TTS
+ELEVENLABS_API_KEY=
+ELEVENLABS_VOICE=rachel
+ELEVENLABS_MODEL=eleven_multilingual_v2
+TTS_ENABLED=true
 
 # ─── Robot API Security ─────────────────────────────────────
 # This key is required for /api/v1/* endpoints
@@ -456,7 +472,7 @@ WorkingDirectory=${APP_DIR}
 EnvironmentFile=${APP_DIR}/.env
 Environment="PATH=${VENV_DIR}/bin:/usr/local/bin:/usr/bin:/bin"
 
-# Start with gunicorn for production (gevent + WebSocket support)
+# Start with Flask + gevent (SSE streaming support)
 ExecStart=${VENV_DIR}/bin/python run.py
 
 # Graceful shutdown
@@ -588,18 +604,24 @@ server {
         }
     }
 
-    # ─── WebSocket (Socket.IO) ───────────────────────────────
-    location /socket.io/ {
+    # ─── SSE streaming endpoints ─────────────────────────────
+    location ~ ^/api/(stream|stream_prepared) {
+        limit_req zone=api_limit burst=10 nodelay;
+
         proxy_pass http://psk_backend;
         proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection "upgrade";
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header Connection "";
+
+        # Critical for SSE — disable all buffering
         proxy_buffering off;
+        proxy_cache off;
         proxy_read_timeout 300s;
+        chunked_transfer_encoding on;
+        add_header X-Accel-Buffering no always;
     }
 
     # ─── Swagger API docs ────────────────────────────────────
@@ -625,7 +647,7 @@ server {
         add_header Cache-Control "public, immutable";
     }
 
-    # ─── Admin panel ─────────────────────────────────────────
+    # ─── Admin panel & Admin API ──────────────────────────────
     location /admin/ {
         limit_req zone=general_limit burst=5 nodelay;
 
@@ -636,6 +658,9 @@ server {
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
         proxy_set_header Connection "";
+
+        # Allow large file uploads for document ingestion (PDF, images)
+        client_max_body_size 100M;
     }
 
     # ─── Web UI & remaining routes ───────────────────────────
@@ -649,9 +674,6 @@ server {
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
         proxy_set_header Connection "";
-
-        # SSE support for /api/stream
-        proxy_buffering off;
     }
 
     # ─── Block dot files ─────────────────────────────────────
@@ -861,8 +883,10 @@ echo "  sudo systemctl restart ${SERVICE_NAME}   # Restart app"
 echo "  sudo systemctl stop ${SERVICE_NAME}      # Stop app"
 echo "  sudo journalctl -u ${SERVICE_NAME} -f    # Live logs"
 echo ""
-echo -e "${BOLD}Upload Documents:${NC}"
-echo "  Open https://${DOMAIN}/admin/ in your browser"
+echo -e "${BOLD}Admin Panel:${NC}"
+echo "  Upload & manage documents: https://${DOMAIN}/admin/"
+echo "  Supported: PDF, DOCX, TXT, MD, PNG, JPG, TIFF, BMP, WEBP"
+echo "  OCR: Tesseract (auto-detects scanned pages & images)"
 echo ""
 if [[ "$SKIP_SSL" == "true" ]]; then
     echo -e "${YELLOW}SSL Setup (when DNS is ready):${NC}"

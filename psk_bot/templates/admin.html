@@ -561,8 +561,8 @@
       <div class="upload-area" id="upload-area">
         <div class="upload-icon">📄</div>
         <div class="upload-text">Drag and drop a file here, or click to browse</div>
-        <div class="upload-hint">Supported: PDF, TXT, MD, DOCX (Max 50MB)</div>
-        <input type="file" class="file-input" id="file-input" accept=".pdf,.txt,.md,.docx">
+        <div class="upload-hint">Supported: PDF, DOCX, TXT, MD, HTML, XLS, XLSX, Images (Max 50MB)</div>
+        <input type="file" class="file-input" id="file-input" accept=".pdf,.txt,.md,.docx,.html,.htm,.xls,.xlsx,.png,.jpg,.jpeg,.tiff,.tif,.bmp,.webp">
       </div>
       <div class="upload-form" id="upload-form">
         <div class="form-row">
@@ -581,6 +581,41 @@
           <button class="btn btn-primary" id="upload-btn">Upload</button>
           <button class="btn btn-secondary" id="cancel-btn">Cancel</button>
         </div>
+      </div>
+    </div>
+
+    <!-- Bulk Upload Section -->
+    <div class="upload-section">
+      <h2 class="section-title">📂 Bulk Upload (Folder)</h2>
+      <div class="upload-area" id="bulk-upload-area">
+        <div class="upload-icon">📚</div>
+        <div class="upload-text">Select multiple files or a whole folder to upload at once</div>
+        <div class="upload-hint">Each file becomes a separate document with its own vector index</div>
+        <input type="file" class="file-input" id="bulk-file-input" accept=".pdf,.txt,.md,.docx,.html,.htm,.xls,.xlsx,.png,.jpg,.jpeg,.tiff,.tif,.bmp,.webp" multiple webkitdirectory>
+      </div>
+      <div class="bulk-controls" id="bulk-controls" style="display:none; margin-top:16px; padding-top:16px; border-top:1px solid var(--gray-200);">
+        <div class="form-row" style="align-items:flex-end; gap:12px;">
+          <div class="form-group" style="flex:1;">
+            <label id="bulk-file-count" style="font-weight:600; color:var(--gray-900);">0 files selected</label>
+            <div id="bulk-file-list" style="max-height:120px; overflow-y:auto; font-size:0.8rem; color:var(--gray-500); margin-top:4px; line-height:1.6;"></div>
+          </div>
+          <div class="form-group">
+            <label for="bulk-name-prefix">Name Prefix (optional)</label>
+            <input type="text" id="bulk-name-prefix" placeholder="e.g. AlgoSec - ">
+          </div>
+          <button class="btn btn-primary" id="bulk-upload-btn">Upload All</button>
+          <button class="btn btn-secondary" id="bulk-cancel-btn">Cancel</button>
+        </div>
+        <div id="bulk-progress" style="display:none; margin-top:12px;">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <div class="spinner" style="width:16px; height:16px; border-width:2px;"></div>
+            <span id="bulk-progress-text" style="font-size:0.85rem; color:var(--gray-600);">Uploading...</span>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:12px; text-align:center;">
+        <button class="btn btn-secondary" id="bulk-files-only-btn" style="font-size:0.8rem;">or select individual files (no folder)</button>
+        <input type="file" class="file-input" id="bulk-file-input-flat" accept=".pdf,.txt,.md,.docx,.html,.htm,.xls,.xlsx,.png,.jpg,.jpeg,.tiff,.tif,.bmp,.webp" multiple>
       </div>
     </div>
 
@@ -689,10 +724,10 @@
 
     function handleFileSelect(file) {
       const ext = file.name.split('.').pop().toLowerCase();
-      const validExts = ['pdf', 'txt', 'md', 'docx'];
+      const validExts = ['pdf', 'txt', 'md', 'docx', 'html', 'htm', 'xls', 'xlsx', 'png', 'jpg', 'jpeg', 'tiff', 'tif', 'bmp', 'webp'];
       
       if (!validExts.includes(ext)) {
-        showToast('Invalid file type. Supported: PDF, TXT, MD, DOCX', 'error');
+        showToast('Invalid file type. Supported: PDF, DOCX, TXT, MD, HTML, XLS, XLSX, Images', 'error');
         return;
       }
 
@@ -884,6 +919,103 @@
 
     // Initial load
     loadDocuments();
+
+    // ── Bulk Upload Logic ──────────────────────────────────────────────
+    const bulkUploadArea = document.getElementById('bulk-upload-area');
+    const bulkFileInput = document.getElementById('bulk-file-input');
+    const bulkFileInputFlat = document.getElementById('bulk-file-input-flat');
+    const bulkControls = document.getElementById('bulk-controls');
+    const bulkUploadBtn = document.getElementById('bulk-upload-btn');
+    const bulkCancelBtn = document.getElementById('bulk-cancel-btn');
+    const bulkFilesOnlyBtn = document.getElementById('bulk-files-only-btn');
+    const bulkProgress = document.getElementById('bulk-progress');
+    const bulkProgressText = document.getElementById('bulk-progress-text');
+    let bulkFiles = [];
+
+    const bulkValidExts = ['pdf', 'txt', 'md', 'docx', 'html', 'htm', 'xls', 'xlsx', 'png', 'jpg', 'jpeg', 'tiff', 'tif', 'bmp', 'webp'];
+
+    bulkUploadArea.addEventListener('click', () => bulkFileInput.click());
+    bulkFilesOnlyBtn.addEventListener('click', () => bulkFileInputFlat.click());
+
+    bulkUploadArea.addEventListener('dragover', (e) => { e.preventDefault(); bulkUploadArea.classList.add('dragover'); });
+    bulkUploadArea.addEventListener('dragleave', () => bulkUploadArea.classList.remove('dragover'));
+    bulkUploadArea.addEventListener('drop', (e) => {
+      e.preventDefault();
+      bulkUploadArea.classList.remove('dragover');
+      if (e.dataTransfer.files.length) handleBulkFiles(e.dataTransfer.files);
+    });
+
+    bulkFileInput.addEventListener('change', (e) => { if (e.target.files.length) handleBulkFiles(e.target.files); });
+    bulkFileInputFlat.addEventListener('change', (e) => { if (e.target.files.length) handleBulkFiles(e.target.files); });
+
+    function handleBulkFiles(fileList) {
+      bulkFiles = [];
+      for (const f of fileList) {
+        const ext = f.name.split('.').pop().toLowerCase();
+        if (bulkValidExts.includes(ext) && f.size <= 50 * 1024 * 1024) {
+          bulkFiles.push(f);
+        }
+      }
+      if (bulkFiles.length === 0) {
+        showToast('No supported files found in selection', 'error');
+        return;
+      }
+      document.getElementById('bulk-file-count').textContent = bulkFiles.length + ' file(s) selected';
+      const listHtml = bulkFiles.map(f => `${f.name} (${formatSize(f.size)})`).join('<br>');
+      document.getElementById('bulk-file-list').innerHTML = listHtml;
+      bulkControls.style.display = 'block';
+    }
+
+    bulkCancelBtn.addEventListener('click', () => {
+      bulkFiles = [];
+      bulkFileInput.value = '';
+      bulkFileInputFlat.value = '';
+      bulkControls.style.display = 'none';
+      bulkProgress.style.display = 'none';
+      document.getElementById('bulk-name-prefix').value = '';
+    });
+
+    bulkUploadBtn.addEventListener('click', async () => {
+      if (bulkFiles.length === 0) return;
+
+      bulkUploadBtn.disabled = true;
+      bulkProgress.style.display = 'block';
+      bulkProgressText.textContent = `Uploading ${bulkFiles.length} file(s)...`;
+
+      const formData = new FormData();
+      const prefix = document.getElementById('bulk-name-prefix').value.trim();
+      if (prefix) formData.append('name_prefix', prefix);
+
+      for (const f of bulkFiles) {
+        formData.append('files', f);
+      }
+
+      try {
+        const response = await fetch('/admin/api/documents/bulk', {
+          method: 'POST',
+          body: formData
+        });
+        const data = await response.json();
+
+        if (response.ok) {
+          let msg = data.message || `${data.uploaded.length} uploaded`;
+          if (data.skipped && data.skipped.length > 0) {
+            msg += ` (${data.skipped.length} skipped)`;
+          }
+          showToast(msg, 'success');
+          bulkCancelBtn.click();
+          loadDocuments();
+          startPolling();
+        } else {
+          showToast(data.error || 'Bulk upload failed', 'error');
+        }
+      } catch (error) {
+        showToast('Bulk upload failed: ' + error.message, 'error');
+      } finally {
+        bulkUploadBtn.disabled = false;
+        bulkProgress.style.display = 'none';
+      }
+    });
   </script>
 </body>
 </html>

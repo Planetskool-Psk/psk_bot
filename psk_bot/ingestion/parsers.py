@@ -283,6 +283,235 @@ def parse_markdown(file_path: Path) -> str:
     return parse_txt(file_path)
 
 
+# ── HTML parser ─────────────────────────────────────────────────────────
+
+
+def parse_html(file_path: Path) -> str:
+    """Parse an HTML file, extracting both visible text and structural context.
+
+    Strategy:
+      1. Read the raw HTML (multi-encoding fallback).
+      2. Use BeautifulSoup to strip scripts/styles and extract the readable
+         text while preserving structural hints (headings, list items, table
+         rows) so that RAG can reason over the original page layout.
+      3. Preserve <code>/<pre> blocks as-is for code-based RAG.
+      4. Keep the *raw HTML source* appended at the end (truncated) so that
+         questions about the HTML code itself ("what classes does the header
+         use?") can be answered.
+    """
+    try:
+        from bs4 import BeautifulSoup, Tag
+    except ImportError:
+        logger.error("beautifulsoup4 is required for HTML parsing. Run: pip install beautifulsoup4 lxml")
+        raise
+
+    raw_html = _read_text_file(file_path)
+    if not raw_html:
+        return ""
+
+    # Prefer lxml but fall back to Python's built-in html.parser
+    try:
+        soup = BeautifulSoup(raw_html, "lxml")
+    except Exception:
+        soup = BeautifulSoup(raw_html, "html.parser")
+
+    # Remove elements that never contribute useful text
+    for tag in soup.find_all(["script", "style", "noscript", "svg", "iframe"]):
+        tag.decompose()
+
+    text_parts: List[str] = []
+
+    # ── Extract <title> ──
+    title_tag = soup.find("title")
+    if title_tag and title_tag.get_text(strip=True):
+        text_parts.append(f"Page Title: {title_tag.get_text(strip=True)}")
+
+    # ── Extract <meta description> ──
+    meta_desc = soup.find("meta", attrs={"name": "description"})
+    if meta_desc and meta_desc.get("content"):
+        text_parts.append(f"Description: {meta_desc['content'].strip()}")
+
+    # ── Walk the body tree and preserve structure ──
+    body = soup.body or soup
+    for element in body.descendants:
+        if not isinstance(element, Tag):
+            continue
+
+        tag_name = element.name
+
+        # Headings
+        if tag_name in ("h1", "h2", "h3", "h4", "h5", "h6"):
+            heading_text = element.get_text(" ", strip=True)
+            if heading_text:
+                level = tag_name[1]
+                text_parts.append(f"{'#' * int(level)} {heading_text}")
+
+        # Paragraphs and divs with direct text
+        elif tag_name in ("p", "article", "section", "blockquote"):
+            para_text = element.get_text(" ", strip=True)
+            if para_text and len(para_text) > 5:
+                text_parts.append(para_text)
+
+        # List items
+        elif tag_name == "li":
+            li_text = element.get_text(" ", strip=True)
+            if li_text:
+                text_parts.append(f"• {li_text}")
+
+        # Table rows — pipe-delimited
+        elif tag_name == "tr":
+            cells = [td.get_text(" ", strip=True) for td in element.find_all(["td", "th"])]
+            row_text = " | ".join(c for c in cells if c)
+            if row_text:
+                text_parts.append(row_text)
+
+        # Code blocks
+        elif tag_name in ("pre", "code"):
+            code_text = element.get_text().strip()
+            if code_text and len(code_text) > 5:
+                text_parts.append(f"```\n{code_text}\n```")
+
+    # Deduplicate consecutive identical lines (common with nested tags)
+    deduped: List[str] = []
+    for line in text_parts:
+        if not deduped or line != deduped[-1]:
+            deduped.append(line)
+
+    visible_text = "\n\n".join(deduped)
+
+    # ── Optionally append raw HTML source (only first 3000 chars to avoid chunk noise) ──
+    combined = visible_text
+    raw_section_len = 0
+    if len(visible_text) < 500:
+        # Very little visible text — include some raw HTML for context
+        max_raw = 3000
+        raw_section = raw_html.strip()
+        raw_section_len = len(raw_section)
+        if len(raw_section) > max_raw:
+            raw_section = raw_section[:max_raw] + "\n... [HTML source truncated]"
+        combined = f"{visible_text}\n\n─── RAW HTML SOURCE ───\n{raw_section}"
+
+    logger.info("Parsed HTML: %s (%d chars visible text, %d chars raw source)",
+                file_path.name, len(visible_text), raw_section_len)
+    return combined
+
+
+def _read_text_file(file_path: Path) -> str:
+    """Read a text file with multi-encoding fallback."""
+    encodings = ['utf-8', 'utf-8-sig', 'latin-1', 'cp1252']
+    for encoding in encodings:
+        try:
+            return file_path.read_text(encoding=encoding)
+        except UnicodeDecodeError:
+            continue
+    return file_path.read_bytes().decode('utf-8', errors='ignore')
+
+
+# ── Excel parser (XLS / XLSX) ──────────────────────────────────────────
+
+
+def parse_excel(file_path: Path) -> str:
+    """Parse Excel files (.xls, .xlsx) into structured text for RAG.
+
+    Each worksheet is rendered as a markdown-style table so the LLM
+    can reason over rows, columns, headers, and numeric data.
+    """
+    try:
+        import openpyxl
+    except ImportError:
+        logger.error("openpyxl is required for Excel parsing. Run: pip install openpyxl")
+        raise
+
+    ext = file_path.suffix.lower()
+
+    # For .xls (legacy format), try xlrd
+    if ext == ".xls":
+        return _parse_xls_legacy(file_path)
+
+    # .xlsx via openpyxl
+    wb = openpyxl.load_workbook(str(file_path), read_only=True, data_only=True)
+    text_parts: List[str] = []
+
+    for sheet_name in wb.sheetnames:
+        ws = wb[sheet_name]
+        rows_data: List[List[str]] = []
+
+        for row in ws.iter_rows(values_only=True):
+            cells = [str(cell).strip() if cell is not None else "" for cell in row]
+            # Skip completely empty rows
+            if any(c for c in cells):
+                rows_data.append(cells)
+
+        if not rows_data:
+            continue
+
+        sheet_text = f"## Sheet: {sheet_name}\n"
+
+        # Use first row as header if it looks like one (mostly text)
+        header = rows_data[0]
+        data_rows = rows_data[1:] if len(rows_data) > 1 else []
+
+        # Markdown table: header
+        sheet_text += "| " + " | ".join(header) + " |\n"
+        sheet_text += "| " + " | ".join(["---"] * len(header)) + " |\n"
+
+        # Markdown table: data rows
+        for row_cells in data_rows:
+            # Pad or trim to match header column count
+            padded = row_cells + [""] * (len(header) - len(row_cells))
+            padded = padded[:len(header)]
+            sheet_text += "| " + " | ".join(padded) + " |\n"
+
+        text_parts.append(sheet_text)
+
+    wb.close()
+
+    text = "\n\n".join(text_parts)
+    logger.info("Parsed Excel: %s (%d sheets, %d chars)",
+                file_path.name, len(wb.sheetnames) if text_parts else 0, len(text))
+    return text
+
+
+def _parse_xls_legacy(file_path: Path) -> str:
+    """Parse legacy .xls files using xlrd."""
+    try:
+        import xlrd
+    except ImportError:
+        logger.error(
+            "xlrd is required for .xls files. Run: pip install xlrd\n"
+            "Alternatively, convert to .xlsx and re-upload."
+        )
+        raise
+
+    wb = xlrd.open_workbook(str(file_path))
+    text_parts: List[str] = []
+
+    for sheet_idx in range(wb.nsheets):
+        ws = wb.sheet_by_index(sheet_idx)
+        if ws.nrows == 0:
+            continue
+
+        sheet_text = f"## Sheet: {ws.name}\n"
+
+        # Header row
+        header = [str(ws.cell_value(0, c)).strip() for c in range(ws.ncols)]
+        sheet_text += "| " + " | ".join(header) + " |\n"
+        sheet_text += "| " + " | ".join(["---"] * len(header)) + " |\n"
+
+        # Data rows
+        for r in range(1, ws.nrows):
+            cells = [str(ws.cell_value(r, c)).strip() for c in range(ws.ncols)]
+            if any(c for c in cells):
+                sheet_text += "| " + " | ".join(cells) + " |\n"
+
+        text_parts.append(sheet_text)
+
+    text = "\n\n".join(text_parts)
+    logger.info("Parsed XLS (legacy): %s (%d sheets, %d chars)",
+                file_path.name, wb.nsheets, len(text))
+    return text
+
+
 def parse_docx(file_path: Path) -> str:
     """Parse Microsoft Word DOCX file, including images via OCR."""
     try:
@@ -371,6 +600,10 @@ def parse_document(file_path: Path) -> str:
         '.pdf': parse_pdf,
         '.txt': parse_txt,
         '.md': parse_markdown,
+        '.html': parse_html,
+        '.htm': parse_html,
+        '.xls': parse_excel,
+        '.xlsx': parse_excel,
         '.docx': parse_docx,
         '.png': parse_image,
         '.jpg': parse_image,
@@ -390,4 +623,8 @@ def parse_document(file_path: Path) -> str:
 
 def get_supported_extensions() -> set:
     """Get set of supported file extensions."""
-    return {'.pdf', '.txt', '.md', '.docx', '.png', '.jpg', '.jpeg', '.tiff', '.tif', '.bmp', '.webp'}
+    return {
+        '.pdf', '.txt', '.md', '.html', '.htm',
+        '.xls', '.xlsx', '.docx',
+        '.png', '.jpg', '.jpeg', '.tiff', '.tif', '.bmp', '.webp',
+    }

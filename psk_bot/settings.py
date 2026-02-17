@@ -77,6 +77,12 @@ class AppSettings:
             ),
         )
 
+        # ─── ElevenLabs TTS ─────────────────────────────────────────
+        self.elevenlabs_api_key: str = os.getenv("ELEVENLABS_API_KEY", "")
+        self.elevenlabs_voice: str = os.getenv("ELEVENLABS_VOICE", "rachel")
+        self.elevenlabs_model: str = os.getenv("ELEVENLABS_MODEL", "eleven_multilingual_v2")
+        self.tts_enabled: bool = os.getenv("TTS_ENABLED", "true").lower() == "true"
+
         self.secret_key: str = os.getenv("SECRET_KEY", "a_very_secret_key")
 
     @property

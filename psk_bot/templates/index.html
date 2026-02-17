@@ -417,6 +417,88 @@
     #send-button:disabled { opacity: 0.4; cursor: not-allowed; transform: none; box-shadow: none; }
     #send-button svg { width: 20px; height: 20px; }
 
+    /* ─── Mic Button ─────────────────────────────────────────── */
+    #mic-button {
+      background: var(--gray-100);
+      color: var(--gray-600);
+      border: 2px solid var(--gray-200);
+      width: 46px;
+      height: 46px;
+      border-radius: 14px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: all 0.2s;
+    }
+    #mic-button:hover { background: var(--gray-200); color: var(--gray-800); }
+    #mic-button.recording {
+      background: var(--error);
+      color: white;
+      border-color: var(--error);
+      animation: mic-pulse 1.2s ease-in-out infinite;
+    }
+    #mic-button:disabled { opacity: 0.4; cursor: not-allowed; }
+    #mic-button svg { width: 20px; height: 20px; }
+
+    @keyframes mic-pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+      50% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
+    }
+
+    /* ─── Speaker Button on bot messages ─────────────────────── */
+    .tts-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--gray-100);
+      border: 1px solid var(--gray-200);
+      border-radius: 8px;
+      width: 30px;
+      height: 30px;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-left: 6px;
+      vertical-align: middle;
+      flex-shrink: 0;
+    }
+    .tts-btn:hover { background: var(--primary-glow); border-color: var(--primary-light); }
+    .tts-btn.playing { background: var(--primary); border-color: var(--primary); color: white; }
+    .tts-btn svg { width: 14px; height: 14px; }
+
+    .bot-message-footer {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    /* ─── Auto-speak toggle ───────────────────────────────── */
+    .auto-speak-toggle {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      background: rgba(255, 255, 255, 0.15);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      border-radius: 8px;
+      padding: 5px 10px;
+      cursor: pointer;
+      color: rgba(255,255,255,0.7);
+      font-size: 0.75rem;
+      font-family: inherit;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+    .auto-speak-toggle:hover { background: rgba(255,255,255,0.2); color: white; }
+    .auto-speak-toggle.active { background: rgba(255,255,255,0.25); color: white; }
+    .auto-speak-toggle svg { width: 14px; height: 14px; }
+    .auto-speak-toggle .toggle-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: rgba(255,255,255,0.4); transition: background 0.2s;
+    }
+    .auto-speak-toggle.active .toggle-dot { background: var(--success); }
+
     .loader {
       display: inline-flex;
       align-items: center;
@@ -535,6 +617,11 @@
             <path d="M2 4L6 8L10 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
         </div>
+        <button class="auto-speak-toggle" id="auto-speak-toggle" title="Auto-speak bot responses">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M11.383 3.07A1 1 0 0112 4v16a1 1 0 01-1.617.784L5.131 16H2a1 1 0 01-1-1V9a1 1 0 011-1h3.131l5.252-4.784zM14.076 7.261a1 1 0 011.414.036 6 6 0 010 8.406 1 1 0 11-1.45-1.378 4 4 0 000-5.65 1 1 0 01.036-1.414z"/></svg>
+          <span class="toggle-dot"></span>
+          <span>Speak</span>
+        </button>
         <a href="/admin" class="admin-link">Admin</a>
       </div>
     </div>
@@ -559,6 +646,12 @@
     </div>
     <form id="chat-form">
       <input type="text" id="message-input" placeholder="Ask me anything... &#x1F4AC;" autocomplete="off" />
+      <button type="button" id="mic-button" title="Hold to speak (or click to toggle)">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 1a4 4 0 00-4 4v7a4 4 0 008 0V5a4 4 0 00-4-4z"/>
+          <path d="M19 10v2a7 7 0 01-14 0v-2H3v2a9 9 0 004 7.46V22h2v-2.54A8.96 8.96 0 0012 21a8.96 8.96 0 003-2.54V22h2v-2.54A9 9 0 0021 12v-2h-2z" fill-rule="evenodd"/>
+        </svg>
+      </button>
       <button type="submit" id="send-button">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
           <path d="M3.478 2.405a.75.75 0 00-.926.94l2.432 7.905H13.5a.75.75 0 010 1.5H4.984l-2.432 7.905a.75.75 0 00.926.94 60.519 60.519 0 0018.445-8.986.75.75 0 000-1.218A60.517 60.517 0 003.478 2.405z" />
@@ -574,6 +667,7 @@
       const messageInput = document.getElementById("message-input");
       const chatForm = document.getElementById("chat-form");
       const sendButton = document.getElementById("send-button");
+      const micButton = document.getElementById("mic-button");
       const statusBar = document.getElementById("status-bar");
       const statusDot = statusBar.querySelector(".status-dot");
       const statusText = statusBar.querySelector(".status-text");
@@ -594,6 +688,233 @@
       let chatMode = 'free';
       let conversationHistory = [];
       let activeDocumentId = null;
+
+      // ─── TTS state & streaming audio queue ─────────────────
+      let ttsEnabled = false;
+      let autoSpeak = false;
+      let currentAudio = null;
+      let currentPlayingBtn = null;
+      const audioQueue = [];       // queue of { blob, url } for sequential playback
+      let isPlayingQueue = false;  // true while the queue is being drained
+      let ttsSentenceBuffer = '';  // accumulates tokens until a sentence boundary
+      let ttsAbort = false;        // set true to cancel in-flight TTS requests
+
+      const autoSpeakToggle = document.getElementById('auto-speak-toggle');
+
+      // Check if TTS is available
+      fetch('/api/tts/status').then(r => r.json()).then(d => {
+        ttsEnabled = d.enabled;
+        if (!ttsEnabled) autoSpeakToggle.style.display = 'none';
+      }).catch(() => { ttsEnabled = false; autoSpeakToggle.style.display = 'none'; });
+
+      // Auto-speak toggle — persists in localStorage
+      autoSpeak = localStorage.getItem('psk_auto_speak') === 'true';
+      if (autoSpeak) autoSpeakToggle.classList.add('active');
+      autoSpeakToggle.addEventListener('click', () => {
+        autoSpeak = !autoSpeak;
+        autoSpeakToggle.classList.toggle('active', autoSpeak);
+        localStorage.setItem('psk_auto_speak', autoSpeak);
+        if (!autoSpeak) stopAllTTS();
+      });
+
+      function stopAllTTS() {
+        ttsAbort = true;
+        audioQueue.length = 0;
+        isPlayingQueue = false;
+        if (currentAudio) {
+          currentAudio.pause();
+          currentAudio = null;
+        }
+        if (currentPlayingBtn) {
+          currentPlayingBtn.classList.remove('playing');
+          currentPlayingBtn = null;
+        }
+      }
+
+      // ── Manual play button (full response) ──────────────────
+      function createTTSButton(text) {
+        if (!ttsEnabled) return null;
+        const btn = document.createElement('button');
+        btn.className = 'tts-btn';
+        btn.title = 'Listen to this response';
+        btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M11.383 3.07A1 1 0 0112 4v16a1 1 0 01-1.617.784L5.131 16H2a1 1 0 01-1-1V9a1 1 0 011-1h3.131l5.252-4.784zM14.076 7.261a1 1 0 011.414.036 6 6 0 010 8.406 1 1 0 11-1.45-1.378 4 4 0 000-5.65 1 1 0 01.036-1.414zM17.242 4.087a1 1 0 011.414.056 11 11 0 010 14.714 1 1 0 11-1.47-1.357 9 9 0 000-12 1 1 0 01.056-1.413z"/></svg>';
+        btn.addEventListener('click', () => playTTSFull(text, btn));
+        return btn;
+      }
+
+      async function playTTSFull(text, btn) {
+        if (currentAudio && currentPlayingBtn === btn) {
+          stopAllTTS();
+          return;
+        }
+        stopAllTTS();
+        ttsAbort = false;
+        btn.classList.add('playing');
+        currentPlayingBtn = btn;
+        try {
+          const resp = await fetch('/api/tts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text }),
+          });
+          if (!resp.ok || ttsAbort) { btn.classList.remove('playing'); currentPlayingBtn = null; return; }
+          const blob = await resp.blob();
+          const url = URL.createObjectURL(blob);
+          const audio = new Audio(url);
+          currentAudio = audio;
+          audio.onended = () => { btn.classList.remove('playing'); currentPlayingBtn = null; currentAudio = null; URL.revokeObjectURL(url); };
+          audio.onerror = () => { btn.classList.remove('playing'); currentPlayingBtn = null; currentAudio = null; };
+          await audio.play();
+        } catch (e) {
+          console.error('TTS playback failed:', e);
+          btn.classList.remove('playing'); currentPlayingBtn = null;
+        }
+      }
+
+      // ── Streaming TTS: sentence-by-sentence ─────────────────
+      // Detect sentence boundaries for natural speech chunking
+      const SENTENCE_END = /[.!?;]\s*$/;
+      const NEWLINE_END  = /\n\s*$/;
+      const MIN_CHUNK_LEN = 20; // don't speak tiny fragments
+
+      function resetStreamingTTS() {
+        ttsSentenceBuffer = '';
+        ttsAbort = false;
+        audioQueue.length = 0;
+        isPlayingQueue = false;
+      }
+
+      function feedToken(token) {
+        if (!ttsEnabled || !autoSpeak) return;
+        ttsSentenceBuffer += token;
+        // Check if we hit a sentence boundary with enough text
+        if (ttsSentenceBuffer.length >= MIN_CHUNK_LEN &&
+            (SENTENCE_END.test(ttsSentenceBuffer) || NEWLINE_END.test(ttsSentenceBuffer))) {
+          const sentence = ttsSentenceBuffer.trim();
+          ttsSentenceBuffer = '';
+          if (sentence) enqueueTTS(sentence);
+        }
+      }
+
+      function flushStreamingTTS() {
+        if (!ttsEnabled || !autoSpeak) return;
+        const remaining = ttsSentenceBuffer.trim();
+        ttsSentenceBuffer = '';
+        if (remaining && remaining.length >= 5) enqueueTTS(remaining);
+      }
+
+      async function enqueueTTS(text) {
+        if (ttsAbort) return;
+        try {
+          const resp = await fetch('/api/tts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text }),
+          });
+          if (!resp.ok || ttsAbort) return;
+          const blob = await resp.blob();
+          if (ttsAbort) return;
+          audioQueue.push(blob);
+          if (!isPlayingQueue) drainAudioQueue();
+        } catch (e) {
+          console.warn('TTS enqueue failed:', e);
+        }
+      }
+
+      async function drainAudioQueue() {
+        if (isPlayingQueue) return;
+        isPlayingQueue = true;
+        while (audioQueue.length > 0 && !ttsAbort) {
+          const blob = audioQueue.shift();
+          const url = URL.createObjectURL(blob);
+          const audio = new Audio(url);
+          currentAudio = audio;
+          await new Promise(resolve => {
+            audio.onended = () => { URL.revokeObjectURL(url); resolve(); };
+            audio.onerror = () => { URL.revokeObjectURL(url); resolve(); };
+            audio.play().catch(() => resolve());
+          });
+          currentAudio = null;
+        }
+        isPlayingQueue = false;
+      }
+
+      // ─── Speech-to-Text (Web Speech API) ────────────────────
+      let recognition = null;
+      let isRecording = false;
+
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (SpeechRecognition) {
+        recognition = new SpeechRecognition();
+        recognition.continuous = false;
+        recognition.interimResults = true;
+        recognition.lang = 'en-US';
+        recognition.maxAlternatives = 1;
+
+        recognition.onstart = () => {
+          isRecording = true;
+          micButton.classList.add('recording');
+          micButton.title = 'Listening... click to stop';
+        };
+
+        recognition.onresult = (event) => {
+          let transcript = '';
+          for (let i = event.resultIndex; i < event.results.length; i++) {
+            transcript += event.results[i][0].transcript;
+          }
+          messageInput.value = transcript;
+          // If result is final, auto-submit
+          if (event.results[event.results.length - 1].isFinal) {
+            stopRecording();
+            if (transcript.trim()) {
+              chatForm.dispatchEvent(new Event('submit'));
+            }
+          }
+        };
+
+        recognition.onerror = (event) => {
+          console.warn('Speech recognition error:', event.error);
+          stopRecording();
+          if (event.error === 'not-allowed') {
+            alert('Microphone access denied. Please allow microphone permission and try again.');
+          }
+        };
+
+        recognition.onend = () => {
+          stopRecording();
+        };
+      } else {
+        // Browser doesn't support speech recognition
+        micButton.disabled = true;
+        micButton.title = 'Speech recognition not supported in this browser';
+      }
+
+      function startRecording() {
+        if (!recognition || isRecording) return;
+        // Stop any playing TTS audio when user starts speaking
+        stopAllTTS();
+        try {
+          recognition.start();
+        } catch (e) {
+          console.warn('Failed to start recognition:', e);
+        }
+      }
+
+      function stopRecording() {
+        if (!recognition) return;
+        isRecording = false;
+        micButton.classList.remove('recording');
+        micButton.title = 'Click to speak';
+        try { recognition.stop(); } catch (e) { /* already stopped */ }
+      }
+
+      micButton.addEventListener('click', () => {
+        if (isRecording) {
+          stopRecording();
+        } else {
+          startRecording();
+        }
+      });
 
       // Mode switching
       modeBtns.forEach(btn => {
@@ -762,6 +1083,13 @@
           const data = await response.json();
           if (response.ok && data.documents && data.documents.length > 0) {
             docSelector.innerHTML = '<option value="" disabled selected>Select document...</option>';
+            // Add "All Documents" option when there are 2+ docs
+            if (data.documents.length >= 2) {
+              const allOpt = document.createElement('option');
+              allOpt.value = '__all__';
+              allOpt.textContent = '📚 All Documents';
+              docSelector.appendChild(allOpt);
+            }
             data.documents.forEach(doc => {
               const option = document.createElement('option');
               option.value = doc.id;
@@ -781,10 +1109,15 @@
         if (newDocId && newDocId !== activeDocumentId) {
           conversationHistory = [];
           activeDocumentId = newDocId;
+          const selectedText = docSelector.options[docSelector.selectedIndex].text;
+          const icon = newDocId === '__all__' ? '\uD83D\uDCDA' : '\uD83D\uDCC4';
+          const subtitle = newDocId === '__all__'
+            ? 'Searching across all your documents'
+            : 'Now chatting with: <strong>' + selectedText + '</strong>';
           chatWindow.innerHTML = '<div class="welcome-message">' +
-            '<div class="welcome-icon">\uD83D\uDCC4</div>' +
+            '<div class="welcome-icon">' + icon + '</div>' +
             '<div class="welcome-title">Ready to Chat!</div>' +
-            '<div class="welcome-text">Now chatting with: <strong>' + docSelector.options[docSelector.selectedIndex].text + '</strong></div>' +
+            '<div class="welcome-text">' + subtitle + '</div>' +
             '</div>';
           welcomeRemoved = false;
           updateInputState();
@@ -824,6 +1157,7 @@
         isStreaming = true;
         sendButton.disabled = true;
         rawTextBuffer = '';
+        resetStreamingTTS();
 
         const isDocMode = chatMode === 'doc';
         const selectedDocId = isDocMode ? docSelector.value : null;
@@ -868,6 +1202,9 @@
             conversationHistory.push({ role: 'assistant', content: rawTextBuffer, document_id: activeDocumentId });
             removeCursor();
             if (currentBotMessageContainer) currentBotMessageContainer.classList.remove('streaming');
+            addTTSButton(currentBotMessageContainer, rawTextBuffer);
+            // Auto-speak greeting immediately
+            if (ttsEnabled && autoSpeak && rawTextBuffer) enqueueTTS(rawTextBuffer);
           } else {
             const { model, options, history_messages } = prepData;
             const messages = history_messages || [{ role: 'user', content: prepData.prompt }];
@@ -896,6 +1233,7 @@
                   if (evt.type === 'token' && evt.token) {
                     rawTextBuffer += evt.token;
                     renderBuffer();
+                    feedToken(evt.token);
                   }
                   if (evt.type === 'done' || evt.type === 'error') break;
                 } catch (e) { /* skip non-JSON SSE lines */ }
@@ -904,9 +1242,13 @@
 
             await new Promise(r => requestAnimationFrame(r));
 
+            // Flush any remaining sentence fragment to TTS
+            flushStreamingTTS();
+
             conversationHistory.push({ role: 'assistant', content: rawTextBuffer, document_id: activeDocumentId });
             removeCursor();
             if (currentBotMessageContainer) currentBotMessageContainer.classList.remove('streaming');
+            addTTSButton(currentBotMessageContainer, rawTextBuffer);
           }
 
         } catch (error) {
@@ -942,6 +1284,15 @@
         currentBotMessageElement.appendChild(cursorElement);
         chatWindow.appendChild(msg);
         scrollToBottom();
+      }
+
+      function addTTSButton(container, text) {
+        if (!ttsEnabled || !container || !text) return;
+        const footer = document.createElement('div');
+        footer.className = 'bot-message-footer';
+        const btn = createTTSButton(text);
+        if (btn) footer.appendChild(btn);
+        container.appendChild(footer);
       }
 
       function showLoader() {

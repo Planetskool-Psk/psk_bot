@@ -66,20 +66,25 @@ class PromptBuilder:
                 content = str(doc.get("content", "")).strip()
                 if not content:
                     continue
-                content_key = content[:200].lower().replace(" ", "")
+                # Deduplicate by first 150 chars (ignore minor differences)
+                content_key = content[:150].lower().replace(" ", "")
                 if content_key in seen_content:
                     continue
                 seen_content.add(content_key)
-                content = " ".join(content.split())
+                # Preserve original whitespace/newlines for structure, just collapse runs
+                import re
+                content = re.sub(r'[ \t]+', ' ', content)
+                content = re.sub(r'\n{3,}', '\n\n', content)
                 score = float(doc.get("relevance", doc.get("similarity", doc.get("score", 0.0))))
-                if score < 0.25 and idx > 2:
-                    continue
-                doc_parts.append(f"[{idx}] {content}")
+                # Include all available chunks — let the LLM judge relevance
+                source_label = doc.get("source_document", "")
+                prefix = f"[{idx}]" + (f" ({source_label})" if source_label else "")
+                doc_parts.append(f"{prefix} {content}")
             if doc_parts:
                 parts.append("FROM DOCUMENTS:\n" + "\n\n".join(doc_parts))
 
         if not parts:
-            return "No relevant information found."
+            return "No relevant information found in the documents."
 
         combined = "\n\n".join(parts)
         return self._truncate(combined, self._config.max_context_chars)
@@ -180,17 +185,17 @@ class RAGService:
             if self._vector_store.ensure_ready():
                 documents = self._retrieve_documents(cleaned_query)
 
-            # Step 2: Build prompt — use RAG context if available, otherwise direct LLM
+            # Step 2: Build prompt — always use RAG if documents exist
             best_doc_score = 0.0
             if documents:
                 best_doc_score = float(documents[0].get("relevance", documents[0].get("similarity", 0.0)))
 
-            if documents and best_doc_score >= 0.25:
-                # Good document matches — use RAG prompt
+            if documents:
+                # Always use RAG prompt when documents are available — let the LLM judge relevance
                 prompt = self._prompt_builder.build(cleaned_query, documents, history_list)
             else:
-                # No relevant documents — talk directly to LLM
-                logger.info("Documents insufficient (score=%.3f), using direct LLM conversation", best_doc_score)
+                # No documents at all — talk directly to LLM
+                logger.info("No documents found, using direct LLM conversation")
                 prompt = cleaned_query
 
             retrieval_time = time.perf_counter() - start_time

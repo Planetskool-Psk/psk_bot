@@ -220,39 +220,79 @@ def is_thank_you(text: str) -> bool:
     return bool(re.match(r"^(thanks|thank\s*you|thx|ty|cheers)[\s!.,?]*$", text_lower, re.IGNORECASE))
 
 
+def _search_all_documents(question: str, k: int = 8) -> List[Dict[str, Any]]:
+    """Search across ALL ready documents using the merged FAISS index.
+
+    Uses the container's default VectorStoreService which points to
+    vector_store/faiss_index/ (the merged index built by
+    scripts/build_merged_index.py).  This is a single fast FAISS query
+    instead of iterating through hundreds of individual stores.
+    """
+    services = current_app.extensions.get("services")
+    if not services:
+        return []
+
+    vs = services.vector_store
+    if not vs.ensure_ready():
+        current_app.logger.warning("Merged vector index not available — run scripts/build_merged_index.py")
+        return []
+
+    results = _dual_search(vs, question, k=k)
+    return results
+
+
 def extract_search_terms(question: str) -> str:
-    """Extract key search terms from a question for better semantic search.
+    """Extract key search terms from a question for keyword-style fallback search.
     
-    Removes common question words and articles to improve embedding match.
+    Removes common question words and articles.
     E.g., "What is the Paternity Leave Policy?" -> "paternity leave policy"
     """
-    # Common words to remove for better search
     stop_words = {
-        # Question words
         'what', 'who', 'where', 'when', 'why', 'how', 'which', 'whom',
-        # Articles and prepositions
         'is', 'are', 'the', 'a', 'an', 'of', 'in', 'on', 'at', 'to', 'for', 'with', 'by',
-        # Common verbs
         'can', 'could', 'would', 'should', 'do', 'does', 'did', 'have', 'has', 'had',
         'tell', 'me', 'about', 'explain', 'describe', 'give', 'get', 'please',
-        # Pronouns
         'i', 'my', 'we', 'our', 'you', 'your', 'they', 'their',
     }
-    
-    # Clean the question
     import string
     text = question.lower()
-    # Remove punctuation
     text = text.translate(str.maketrans('', '', string.punctuation))
-    
-    # Split into words and filter
     words = text.split()
     key_words = [w for w in words if w not in stop_words and len(w) > 1]
-    
-    # If we have key words, use them; otherwise fall back to original
     if key_words:
         return ' '.join(key_words)
     return question
+
+
+def _dual_search(vector_store, question: str, k: int) -> list:
+    """Search using both the full question and extracted keywords, then merge results.
+    
+    Embedding models (nomic-embed-text) perform best with full sentences,
+    so we search with the original question first. Then we also search with
+    keyword-extracted terms for broader recall, and merge/deduplicate.
+    """
+    # Primary search: full question (best for semantic similarity)
+    results_full = vector_store.search(question, k=k)
+    
+    # Secondary search: keyword-extracted terms (catches keyword matches)
+    extracted = extract_search_terms(question)
+    if extracted != question.lower().strip():
+        results_kw = vector_store.search(extracted, k=k)
+    else:
+        results_kw = []
+    
+    # Merge and deduplicate
+    seen = set()
+    merged = []
+    for doc in results_full + results_kw:
+        content_key = str(doc.get('content', ''))[:150].lower().replace(' ', '')
+        if content_key not in seen:
+            seen.add(content_key)
+            merged.append(doc)
+    
+    # Sort by relevance and take top k
+    merged.sort(key=lambda x: float(x.get('relevance', x.get('similarity', x.get('score', 0)))), reverse=True)
+    return merged[:k]
 
 
 @bp.post("/api/prepare")
@@ -260,7 +300,7 @@ def api_prepare():
     """Prepare RAG context and return the prompt for direct Ollama call."""
     payload: Dict[str, Any] = request.get_json(silent=True) or {}
     question = str(payload.get("question") or payload.get("message") or "").strip()
-    document_id = payload.get("document_id")  # Required: specific document to query
+    document_id = payload.get("document_id")  # Required: specific document or "__all__"
     history: List[Dict[str, str]] = payload.get("history") or []  # Conversation history
     
     if not question:
@@ -289,27 +329,33 @@ def api_prepare():
     # Get RAG context and build prompt
     rag = services.rag_service
     
-    # Use document-specific vector store
     documents = []
     from psk_bot.services.vector_store import VectorStoreService
     from psk_bot.services.document_manager import get_document_manager
     
-    doc_manager = get_document_manager()
-    doc_info = doc_manager.get_document(document_id)
-    
-    if not doc_info:
-        return jsonify({"error": "Document not found."}), 404
-    
-    if doc_info.status != 'ready':
-        return jsonify({"error": f"Document is still {doc_info.status}. Please wait."}), 400
-    
-    # Create vector store for this specific document
-    doc_vector_store = VectorStoreService.for_document(document_id)
-    if doc_vector_store.ensure_ready():
-        # Extract key search terms for better semantic matching
-        search_query = extract_search_terms(question)
-        current_app.logger.info(f"Search query: '{question}' -> '{search_query}'")
-        documents = doc_vector_store.search(search_query, k=5)
+    from psk_bot.settings import settings as app_settings
+    search_k = app_settings.top_k_results  # From .env TOP_K_RESULTS
+
+    if document_id == "__all__":
+        # Search across ALL ready documents
+        documents = _search_all_documents(question, k=search_k)
+    else:
+        # Single document mode
+        doc_manager = get_document_manager()
+        doc_info = doc_manager.get_document(document_id)
+        
+        if not doc_info:
+            return jsonify({"error": "Document not found."}), 404
+        
+        if doc_info.status != 'ready':
+            return jsonify({"error": f"Document is still {doc_info.status}. Please wait."}), 400
+        
+        # Create vector store for this specific document
+        doc_vector_store = VectorStoreService.for_document(document_id)
+        if doc_vector_store.ensure_ready():
+            # Dual search: full question + keyword extraction for better recall
+            documents = _dual_search(doc_vector_store, question, k=search_k)
+            current_app.logger.info(f"Search: '{question}' -> {len(documents)} results")
 
     # Always build a RAG prompt from the selected document — never fall back to general LLM
     current_prompt = rag._prompt_builder.build(question, documents, [])
@@ -494,20 +540,24 @@ def robot_chat():
         from psk_bot.services.vector_store import VectorStoreService
         from psk_bot.services.document_manager import get_document_manager
 
-        doc_manager = get_document_manager()
-        doc_info = doc_manager.get_document(document_id)
-        if not doc_info:
-            return jsonify({"error": "Document not found."}), 404
-        if doc_info.status != "ready":
-            return jsonify({"error": f"Document is still {doc_info.status}."}), 400
-
-        doc_vector_store = VectorStoreService.for_document(document_id)
+        from psk_bot.settings import settings as app_settings
+        search_k = app_settings.top_k_results
         documents = []
-        if doc_vector_store.ensure_ready():
-            search_query = extract_search_terms(question)
-            documents = doc_vector_store.search(search_query, k=5)
+        if document_id == "__all__":
+            documents = _search_all_documents(question, k=search_k)
+        else:
+            doc_manager = get_document_manager()
+            doc_info = doc_manager.get_document(document_id)
+            if not doc_info:
+                return jsonify({"error": "Document not found."}), 404
+            if doc_info.status != "ready":
+                return jsonify({"error": f"Document is still {doc_info.status}."}), 400
+
+            doc_vector_store = VectorStoreService.for_document(document_id)
+            if doc_vector_store.ensure_ready():
+                documents = _dual_search(doc_vector_store, question, k=search_k)
         source = "document"
-        # Always answer from the selected document — no LLM fallback
+        # Always answer from the selected document(s) — no LLM fallback
         prompt = rag._prompt_builder.build(question, documents, history)
     else:
         # Free-form: direct LLM conversation
@@ -577,15 +627,20 @@ def robot_chat_stream():
         if document_id:
             from psk_bot.services.vector_store import VectorStoreService
             from psk_bot.services.document_manager import get_document_manager
-            doc_manager = get_document_manager()
-            doc_info = doc_manager.get_document(document_id)
+            from psk_bot.settings import settings as app_settings
+            search_k = app_settings.top_k_results
             documents = []
-            if doc_info and doc_info.status == "ready":
-                doc_vs = VectorStoreService.for_document(document_id)
-                if doc_vs.ensure_ready():
-                    documents = doc_vs.search(extract_search_terms(question), k=5)
+            if document_id == "__all__":
+                documents = _search_all_documents(question, k=search_k)
+            else:
+                doc_manager = get_document_manager()
+                doc_info = doc_manager.get_document(document_id)
+                if doc_info and doc_info.status == "ready":
+                    doc_vs = VectorStoreService.for_document(document_id)
+                    if doc_vs.ensure_ready():
+                        documents = _dual_search(doc_vs, question, k=search_k)
             source = "document"
-            # Always answer from the selected document — no LLM fallback
+            # Always answer from the selected document(s) — no LLM fallback
             prompt = rag._prompt_builder.build(question, documents, history)
         else:
             # Free-form: direct LLM conversation
@@ -640,3 +695,74 @@ def robot_list_documents():
             "status": doc.status,
         })
     return jsonify({"documents": docs})
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# TEXT-TO-SPEECH API (ElevenLabs)
+# ═══════════════════════════════════════════════════════════════════════
+
+@bp.post("/api/tts")
+def api_tts():
+    """Convert text to speech audio using ElevenLabs.
+
+    Request JSON:
+        {
+            "text": "Hello, how can I help you?",
+            "voice": "rachel"  // optional — defaults to configured voice
+        }
+
+    Response: audio/mpeg binary (MP3)
+    """
+    services = current_app.extensions.get("services")
+    if not services or not services.tts:
+        return jsonify({"error": "Text-to-speech is not available. Configure ELEVENLABS_API_KEY."}), 503
+
+    payload: Dict[str, Any] = request.get_json(silent=True) or {}
+    text = str(payload.get("text") or "").strip()
+    voice = payload.get("voice")
+
+    if not text:
+        return jsonify({"error": "text is required."}), 400
+
+    audio_bytes = services.tts.synthesize(text, voice_id=voice)
+    if audio_bytes is None:
+        return jsonify({"error": "TTS synthesis failed. Check logs or API quota."}), 500
+
+    return Response(
+        audio_bytes,
+        mimetype="audio/mpeg",
+        headers={
+            "Content-Disposition": "inline",
+            "Cache-Control": "no-cache",
+        },
+    )
+
+
+@bp.get("/api/tts/voices")
+def api_tts_voices():
+    """List available TTS voices."""
+    services = current_app.extensions.get("services")
+    tts_enabled = bool(services and services.tts and services.tts.enabled)
+    if tts_enabled:
+        voices = services.tts.list_voices()
+    else:
+        from psk_bot.services.tts import ELEVENLABS_VOICES
+        voices = ELEVENLABS_VOICES
+    return jsonify({
+        "enabled": tts_enabled,
+        "voices": voices,
+    })
+
+
+@bp.get("/api/tts/status")
+def api_tts_status():
+    """Check TTS status and usage quota."""
+    services = current_app.extensions.get("services")
+    if not services or not services.tts:
+        return jsonify({"enabled": False, "reason": "No API key configured"})
+
+    usage = services.tts.get_usage()
+    return jsonify({
+        "enabled": True,
+        "usage": usage,
+    })
